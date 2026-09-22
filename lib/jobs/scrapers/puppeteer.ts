@@ -1,14 +1,11 @@
-import puppeteer from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import puppeteer from "puppeteer";
 import chromium from "@sparticuz/chromium";
 import puppeteerCore from "puppeteer-core";
-
-puppeteer.use(StealthPlugin());
 
 async function getBrowser() {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
     return await puppeteerCore.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -17,7 +14,7 @@ async function getBrowser() {
   } else {
     return await puppeteer.launch({
       headless: "new" as any,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
   }
 }
