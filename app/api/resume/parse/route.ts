@@ -2,7 +2,14 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
+if (typeof globalThis.DOMMatrix === "undefined") {
+  (globalThis as any).DOMMatrix = class DOMMatrix {};
+}
+if (typeof globalThis.Path2D === "undefined") {
+  (globalThis as any).Path2D = class Path2D {};
+}
+
+const { PDFParse } = require("pdf-parse");
 import { recognize } from "tesseract.js";
 import { parseResumeFromText } from "@/lib/resume/parser";
 import { refineParsedResumeProfile } from "@/lib/resume/huggingface-refiner";
