@@ -53,7 +53,8 @@ export async function extractFromPage<T>(url: string, evaluateFn: string): Promi
     // Give it a second to render
     await new Promise(r => setTimeout(r, 2000));
     
-    const result = await page.evaluate(evaluateFn);
+    // Evaluate the string as an Immediately Invoked Function Expression
+    const result = await page.evaluate(`(${evaluateFn})()`);
     return result as T;
   } catch (error) {
     console.error(`[Puppeteer] failed to extract from ${url}`, error);

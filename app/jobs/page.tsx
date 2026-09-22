@@ -127,7 +127,14 @@ export default function JobsExplorer() {
         body: JSON.stringify({ uid: user.uid, keyword, jobTitle, location, experience, workModes, jobTypes, salaryMin, salaryMax, sources }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Server crashed: ${text.slice(0, 100)}`);
+      }
+      
       if (!res.ok) throw new Error(data.error || "Failed to fetch jobs");
 
       const allJobs: NormalizedJob[] = data.jobs ?? [];
