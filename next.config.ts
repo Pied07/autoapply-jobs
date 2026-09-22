@@ -5,8 +5,11 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   allowedDevOrigins: ["192.168.0.194"],
   serverExternalPackages: ["pdf-parse", "pdfjs-dist", "tesseract.js"],
-  outputFileTracingIncludes: {
-    "/api/resume/parse": ["./node_modules/pdfjs-dist/**/*", "./node_modules/tesseract.js/**/*"],
+  experimental: {
+    instrumentationHook: true,
+    outputFileTracingIncludes: {
+      "/api/resume/parse": ["./node_modules/pdfjs-dist/**/*", "./node_modules/tesseract.js/**/*"],
+    },
   },
 };
 
