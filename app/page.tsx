@@ -257,10 +257,23 @@ export default function Home() {
         fetch("/api/resume/parse", { method: "POST", body: form }),
         fetch("/api/upload/resume", { method: "POST", body: uploadForm }),
       ]);
-      const data = (await response.json()) as {
-        parsed: ParsedResumeProfile;
-        diagnostics?: { extractedCharacters: number; method: string; error?: string; usedFileNameFallback: boolean };
-      };
+
+      if (!response.ok) {
+        setStatus(`Resume parsing failed (Server Error ${response.status}). Trying to upload anyway...`);
+        // We will continue to save the uploaded file, but without parsing
+      }
+
+      let data: any = null;
+      if (response.ok) {
+        try {
+          data = await response.json();
+        } catch (e) {
+          console.error("Failed to parse API response", e);
+          setStatus("Resume parsing failed. The server returned an invalid response.");
+          return;
+        }
+      }
+
       const uploadData = (await uploadResponse.json().catch(() => undefined)) as
         | { url?: string; filename?: string; contentType?: string; error?: string }
         | undefined;
@@ -287,7 +300,7 @@ export default function Home() {
         }
       }
 
-      if (!response.ok || !data.parsed) {
+      if (!response.ok || !data?.parsed) {
         setStatus("Resume uploaded and saved, but its text could not be read. You can still apply by email.");
         return;
       }

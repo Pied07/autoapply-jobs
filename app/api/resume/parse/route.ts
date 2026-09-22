@@ -11,8 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const pdfWorkerPath = path.join(process.cwd(), "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.mjs");
-PDFParse.setWorker(pathToFileURL(pdfWorkerPath).toString());
+
 
 type ExtractResult = {
   text: string;
