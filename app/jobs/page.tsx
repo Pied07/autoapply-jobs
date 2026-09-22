@@ -400,16 +400,16 @@ export default function JobsExplorer() {
                 const isApplying = applyingJobIds[job.id] === true;
                 const applyMessage = applyMessages[job.id];
                 return (
-                  <div key={job.id ?? idx} className="flex flex-col justify-between rounded border border-[#d9e1ec] bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div key={job.id ?? idx} className="flex flex-col justify-between rounded border border-[#d9e1ec] bg-white p-5 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-[#17202a] leading-snug">{job.title}</h3>
+                        <h3 className="font-semibold text-[#17202a] leading-snug break-words">{job.title}</h3>
                         <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold uppercase ${SOURCE_COLOR[job.source] ?? "bg-gray-100 text-gray-600"}`}>
                           {SOURCE_LABEL[job.source] ?? job.source}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm font-medium text-[#4b5b6c]">{job.company}</p>
-                      <p className="mt-0.5 text-xs text-[#607083]">{[job.location, job.workMode, job.jobType].filter(Boolean).join(" • ")}</p>
+                      <p className="mt-1 text-sm font-medium text-[#4b5b6c] break-words">{job.company}</p>
+                      <p className="mt-0.5 text-xs text-[#607083] break-words">{[job.location, job.workMode, job.jobType].filter(Boolean).join(" • ")}</p>
                       {(job.salaryMin || job.salaryMax) && (
                         <p className="mt-1.5 text-xs font-semibold text-[#245b59]">
                           ₹{job.salaryMin?.toLocaleString("en-IN")} – ₹{job.salaryMax?.toLocaleString("en-IN")}
@@ -423,9 +423,10 @@ export default function JobsExplorer() {
                             <a 
                               key={email} 
                               href={`mailto:${email}`}
-                              className="inline-flex items-center gap-1 rounded bg-[#f2f4f7] px-2 py-1 text-[11px] font-medium text-[#4b5b6c] hover:bg-[#e7edf5]"
+                              className="inline-flex max-w-full items-center gap-1 rounded bg-[#f2f4f7] px-2 py-1 text-[11px] font-medium text-[#4b5b6c] hover:bg-[#e7edf5]"
                             >
-                              📧 {email}
+                              <span>📧</span>
+                              <span className="truncate">{email}</span>
                             </a>
                           ))}
                         </div>
@@ -436,26 +437,28 @@ export default function JobsExplorer() {
                         </p>
                       )}
                     </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-[#edf1f6] pt-4">
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[#edf1f6] pt-4">
                       <span className="text-xs text-[#9aabb8]">
                         {new Date(job.postedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                       </span>
-                      {primaryEmail && (
-                        <button
-                          type="button"
-                          onClick={() => applyByEmail(job, primaryEmail)}
-                          disabled={isApplying}
-                          className="rounded bg-[#245b59] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1e4d4b] disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
-                        >
-                          {isApplying ? "Applying..." : applyMessage?.includes("sent") ? "Applied" : "Apply by Email"}
-                        </button>
-                      )}
-                      {job.applyUrl && (
-                        <a href={job.applyUrl} target="_blank" rel="noreferrer"
-                          className="rounded border border-[#b9c7d8] px-3 py-1.5 text-xs font-medium hover:bg-[#f7f8fb] transition-colors">
-                          Apply →
-                        </a>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {primaryEmail && (
+                          <button
+                            type="button"
+                            onClick={() => applyByEmail(job, primaryEmail)}
+                            disabled={isApplying}
+                            className="rounded bg-[#245b59] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1e4d4b] disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                          >
+                            {isApplying ? "Applying..." : applyMessage?.includes("sent") ? "Applied" : "Apply by Email"}
+                          </button>
+                        )}
+                        {job.applyUrl && (
+                          <a href={job.applyUrl} target="_blank" rel="noreferrer"
+                            className="rounded border border-[#b9c7d8] px-3 py-1.5 text-xs font-medium hover:bg-[#f7f8fb] transition-colors">
+                            Apply →
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
