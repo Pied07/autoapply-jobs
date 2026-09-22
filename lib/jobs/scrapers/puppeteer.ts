@@ -6,11 +6,10 @@ async function getBrowser() {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
     return await puppeteerCore.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: chromium.defaultViewport,
+      defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 720 },
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
-    });
+      headless: (chromium as any).headless || "new",
+    } as any);
   } else {
     return await puppeteer.launch({
       headless: "new" as any,
