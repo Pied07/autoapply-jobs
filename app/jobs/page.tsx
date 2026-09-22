@@ -419,16 +419,21 @@ export default function JobsExplorer() {
                       
                       {emails.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {emails.map((email) => (
-                            <a 
-                              key={email} 
-                              href={`mailto:${email}`}
-                              className="inline-flex max-w-full items-center gap-1 rounded bg-[#f2f4f7] px-2 py-1 text-[11px] font-medium text-[#4b5b6c] hover:bg-[#e7edf5]"
-                            >
-                              <span>📧</span>
-                              <span className="truncate">{email}</span>
-                            </a>
-                          ))}
+                          {emails.map((email) => {
+                            const guessed = email === job.applyEmail && job.isGuessedEmail;
+                            return (
+                              <a 
+                                key={email} 
+                                href={`mailto:${email}`}
+                                className={`inline-flex max-w-full items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${guessed ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-[#f2f4f7] text-[#4b5b6c] hover:bg-[#e7edf5]'}`}
+                                title={guessed ? "Guessed from company website" : ""}
+                              >
+                                <span>📧</span>
+                                <span className="truncate">{email}</span>
+                                {guessed && <span className="ml-0.5 text-[9px] uppercase tracking-wider opacity-80">(Guessed)</span>}
+                              </a>
+                            );
+                          })}
                         </div>
                       )}
                       {applyMessage && (

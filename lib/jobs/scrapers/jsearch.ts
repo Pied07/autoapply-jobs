@@ -96,12 +96,14 @@ export async function fetchJobsFromJSearch(params: {
         extractedEmail = await scrapeEmailFromWebsite(job.employer_website);
       }
 
+      let isGuessedEmail = false;
       // 2. Fallback: guess career email from employer website
       if (!extractedEmail && job.employer_website) {
         try {
           const domain = new URL(job.employer_website).hostname.replace(/^www\./, "");
           if (domain && !domain.includes("linkedin.com") && !domain.includes("indeed.com") && !domain.includes("google.com")) {
             extractedEmail = `careers@${domain}`;
+            isGuessedEmail = true;
           }
         } catch (e) {}
       }
@@ -116,6 +118,7 @@ export async function fetchJobsFromJSearch(params: {
         platform: params.platformName as JobPlatform,
         applyChannel: extractedEmail ? "email" : "site",
         applyEmail: extractedEmail || undefined,
+        isGuessedEmail,
         applyUrl: applyUrl,
         workMode: isRemote ? "remote" : "office",
         jobType: "experienced",

@@ -198,34 +198,34 @@ export function guessCareerEmailForCompany(company: string): string | undefined 
   return `careers@${slug}.com`;
 }
 
-export async function findCareerEmailForJob(job: NormalizedJob): Promise<string | undefined> {
-  if (job.applyEmail) return job.applyEmail;
+export async function findCareerEmailForJob(job: NormalizedJob): Promise<{ email: string; isGuessed: boolean } | undefined> {
+  if (job.applyEmail) return { email: job.applyEmail, isGuessed: !!job.isGuessedEmail };
 
   const descriptionEmails = extractCareerEmails(job.description ?? "");
-  if (descriptionEmails[0]) return descriptionEmails[0];
+  if (descriptionEmails[0]) return { email: descriptionEmails[0], isGuessed: false };
   if (!shouldFetchUrl(job.applyUrl) || isBlockedHost(job.applyUrl)) return undefined;
 
   const pageHtml = await fetchText(job.applyUrl);
   const pageEmails = extractCareerEmails(pageHtml);
-  if (pageEmails[0]) return pageEmails[0];
+  if (pageEmails[0]) return { email: pageEmails[0], isGuessed: false };
 
   const companyDomain = extractCompanyDomains(pageHtml, job.applyUrl)[0];
-  if (companyDomain) return guessedCareerEmailForDomain(companyDomain);
+  if (companyDomain) return { email: guessedCareerEmailForDomain(companyDomain), isGuessed: true };
 
   const mailto = extractCandidateLinks(pageHtml, job.applyUrl)
     .find((href) => href.startsWith("mailto:"))
     ?.replace(/^mailto:/i, "")
     .split("?")[0];
-  if (mailto && isLikelyRealEmail(mailto)) return mailto.toLowerCase();
+  if (mailto && isLikelyRealEmail(mailto)) return { email: mailto.toLowerCase(), isGuessed: false };
 
   for (const link of extractCandidateLinks(pageHtml, job.applyUrl).filter((href) => !href.startsWith("mailto:"))) {
     if (isBlockedHost(link)) continue;
     const linkedHtml = await fetchText(link, 3500);
     const linkedEmails = extractCareerEmails(linkedHtml);
-    if (linkedEmails[0]) return linkedEmails[0];
+    if (linkedEmails[0]) return { email: linkedEmails[0], isGuessed: false };
 
     const linkedDomain = extractCompanyDomains(linkedHtml, link)[0];
-    if (linkedDomain) return guessedCareerEmailForDomain(linkedDomain);
+    if (linkedDomain) return { email: guessedCareerEmailForDomain(linkedDomain), isGuessed: true };
   }
 
   return undefined;
@@ -240,33 +240,25 @@ export async function enrichJobsWithCareerEmails(jobs: NormalizedJob[], maxJobs 
     while (index < Math.min(enriched.length, maxJobs)) {
       const current = index++;
       const job = enriched[current];
-      const email = await findCareerEmailForJob(job) ?? guessCareerEmailForCompany(job.company);
-      if (email) {
+      
+      let found = await findCareerEmailForJob(job);
+      if (!found) {
+        const guessed = guessCareerEmailForCompany(job.company);
+        if (guessed) found = { email: guessed, isGuessed: true };
+      }
+
+      if (found) {
         enriched[current] = {
           ...job,
           applyChannel: "email",
-          applyEmail: email,
-          description: job.description.includes(email) ? job.description : `${job.description} Suggested email: ${email}`.trim(),
+          applyEmail: found.email,
+          isGuessedEmail: found.isGuessed,
+          description: job.description.includes(found.email) ? job.description : `${job.description} ${found.isGuessed ? 'Guessed' : 'Suggested'} email: ${found.email}`.trim(),
         };
       }
     }
   }
 
   await Promise.all(Array.from({ length: workerCount }, worker));
-  for (let current = 0; current < enriched.length; current++) {
-    const job = enriched[current];
-    if (job.applyEmail) continue;
-
-    const email = guessCareerEmailForCompany(job.company);
-    if (!email) continue;
-
-    enriched[current] = {
-      ...job,
-      applyChannel: "email",
-      applyEmail: email,
-      description: job.description.includes(email) ? job.description : `${job.description} Suggested email: ${email}`.trim(),
-    };
-  }
-
   return enriched;
 }

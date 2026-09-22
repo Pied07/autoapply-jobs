@@ -28,8 +28,9 @@ export type NormalizedJob = {
   source: JobSource;
   platform: JobPlatform;
   applyChannel: ApplyChannel;
-  applyUrl?: string;
   applyEmail?: string;
+  isGuessedEmail?: boolean;
+  applyUrl?: string;
   salaryMin?: number;
   salaryMax?: number;
   workMode: WorkMode;

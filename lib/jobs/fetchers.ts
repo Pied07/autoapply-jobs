@@ -14,8 +14,10 @@ import { scrapeJobicy } from "./scrapers/jobicy";
 import { scrapeHasjob } from "./scrapers/hasjob";
 import { enrichJobsWithCareerEmails } from "./email-extractor";
 
+import { fetchJobsFromJSearch as scrapeGoogle } from "./scrapers/jsearch";
+
 export const ALL_SOURCES: JobSource[] = [
-  "linkedin", "indeed", "naukri",
+  "google", "linkedin", "indeed", "naukri",
   "internshala", "timesjobs", "foundit", "hasjob",
   "remoteok", "remotive", "weworkremotely", "arbeitnow", "jobicy"
 ];
@@ -42,7 +44,7 @@ export async function fetchJobs(params: JobSearchParams): Promise<NormalizedJob[
     linkedin:       () => scrapeLinkedIn({ keyword: params.keyword, location: params.location, experience: params.experience }).catch(() => []),
     indeed:         () => scrapeIndeed({ keyword: params.keyword, location: params.location, experience: params.experience }).catch(() => []),
     naukri:         () => scrapeNaukri({ keyword: params.keyword, location: params.location, experience: params.experience }).catch(() => []),
-    google:         () => Promise.resolve([]),
+    google:         () => scrapeGoogle({ keyword: params.keyword, location: params.location, platformName: "google" }).catch(() => []),
     internshala:    () => scrapeInternshala({ keyword: params.keyword, location: params.location, experience: params.experience }).catch(() => []),
     timesjobs:      () => scrapeTimesJobs({ keyword: params.keyword, location: params.location, experience: params.experience }).catch(() => []),
     foundit:        () => scrapeFoundit({ keyword: params.keyword, location: params.location, experience: params.experience }).catch(() => []),
