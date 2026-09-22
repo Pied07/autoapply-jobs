@@ -57,7 +57,7 @@ export async function fetchJobsFromJSearch(params: {
   const url = new URL("https://jsearch.p.rapidapi.com/search-v2");
   url.searchParams.set("query", query);
   url.searchParams.set("page", "1");
-  url.searchParams.set("num_pages", "4");
+  url.searchParams.set("num_pages", "10");
 
   try {
     const res = await fetch(url.toString(), {
