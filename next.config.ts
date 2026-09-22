@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   allowedDevOrigins: ["192.168.0.194"],
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "tesseract.js"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "tesseract.js", "puppeteer-core", "@sparticuz/chromium"],
 };
 
 export default nextConfig;

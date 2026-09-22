@@ -14,7 +14,7 @@ import { scrapeJobicy } from "./scrapers/jobicy";
 import { scrapeHasjob } from "./scrapers/hasjob";
 import { enrichJobsWithCareerEmails } from "./email-extractor";
 
-import { fetchJobsFromJSearch as scrapeGoogle } from "./scrapers/jsearch";
+import { scrapeGoogleJobs as scrapeGoogle } from "./scrapers/google";
 
 export const ALL_SOURCES: JobSource[] = [
   "google", "linkedin", "indeed", "naukri",

@@ -1,13 +1,29 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import chromium from "@sparticuz/chromium";
+import puppeteerCore from "puppeteer-core";
 
 puppeteer.use(StealthPlugin());
 
+async function getBrowser() {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    return await puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
+    });
+  } else {
+    return await puppeteer.launch({
+      headless: "new" as any,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+  }
+}
+
 export async function fetchWithPuppeteer(url: string, waitForSelector?: string, headers?: Record<string, string>): Promise<string> {
-  const browser = await puppeteer.launch({
-    headless: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  const browser = await getBrowser();
   
   try {
     const page = await browser.newPage();
@@ -40,10 +56,7 @@ export async function fetchWithPuppeteer(url: string, waitForSelector?: string, 
 }
 
 export async function extractFromPage<T>(url: string, evaluateFn: string): Promise<T | null> {
-  const browser = await puppeteer.launch({
-    headless: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+  const browser = await getBrowser();
   
   try {
     const page = await browser.newPage();
