@@ -603,20 +603,20 @@ export default function Home() {
                 LinkedIn/Indeed/Naukri totals. Weekly report clears that week&apos;s application history after email.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[
                 ["New relevant", dashboardStats.newRelevant.toString()],
                 ["Applied today", dashboardStats.appliedToday.toString()],
                 ["Failed today", dashboardStats.failedToday.toString()],
                 ["Cooldown", "30 days"],
               ].map(([label, value]) => (
-                <div key={label} className="border border-[#d9e1ec] bg-white p-5">
-                  <p className="text-sm text-[#607083]">{label}</p>
-                  <p className="mt-2 text-3xl font-semibold">{value}</p>
+                <div key={label} className="border border-[#d9e1ec] bg-white p-4 md:p-5">
+                  <p className="text-xs md:text-sm text-[#607083]">{label}</p>
+                  <p className="mt-1 md:mt-2 text-2xl md:text-3xl font-semibold">{value}</p>
                 </div>
               ))}
             </div>
-            <div className="border border-[#d9e1ec] bg-white p-5">
+            <div className="border border-[#d9e1ec] bg-white p-4 md:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-lg font-semibold">Applied jobs</h3>
                 <p className="text-sm text-[#607083]">{applications.length} records</p>
@@ -628,64 +628,116 @@ export default function Home() {
                   application records for your account.
                 </p>
               ) : (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-[#d9e1ec] text-[#607083]">
-                        <th className="py-3 pr-4 font-medium">Job</th>
-                        <th className="py-3 pr-4 font-medium">Company</th>
-                        <th className="py-3 pr-4 font-medium">Source</th>
-                        <th className="py-3 pr-4 font-medium">Channel</th>
-                        <th className="py-3 pr-4 font-medium">Status</th>
-                        <th className="py-3 pr-4 font-medium">Applied at</th>
-                        <th className="py-3 pr-4 font-medium">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {applications.map((application) => {
-                        const action = applicationAction(application);
-
-                        return (
-                          <tr key={application.id} className="border-b border-[#edf1f6]">
-                            <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
-                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
-                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
-                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.channel}</td>
-                            <td className="py-3 pr-4">
-                              <span
-                                className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                                  application.status === "applied"
-                                    ? "bg-[#e7f1ef] text-[#245b59]"
-                                    : application.status === "failed"
-                                      ? "bg-[#fdecec] text-[#9b1c1c]"
-                                      : "bg-[#f2f4f7] text-[#4b5b6c]"
-                                }`}
+                <div className="mt-4">
+                  {/* Mobile Cards View */}
+                  <div className="grid gap-4 md:hidden">
+                    {applications.map((application) => {
+                      const action = applicationAction(application);
+                      return (
+                        <div key={application.id} className="rounded-md border border-[#edf1f6] p-4 text-sm">
+                          <div className="mb-2 flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-medium text-[#17202a]">{application.job.title}</p>
+                              <p className="text-[#4b5b6c]">{application.job.company}</p>
+                            </div>
+                            <span
+                              className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                                application.status === "applied"
+                                  ? "bg-[#e7f1ef] text-[#245b59]"
+                                  : application.status === "failed"
+                                    ? "bg-[#fdecec] text-[#9b1c1c]"
+                                    : "bg-[#f2f4f7] text-[#4b5b6c]"
+                              }`}
+                            >
+                              {application.status}
+                            </span>
+                          </div>
+                          <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-[#607083]">
+                            <p>Source: <span className="font-medium text-[#4b5b6c]">{application.source}</span></p>
+                            <p>Channel: <span className="font-medium text-[#4b5b6c]">{application.channel}</span></p>
+                            <p className="col-span-2">Time: <span className="font-medium text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</span></p>
+                          </div>
+                          <div>
+                            {action.disabled ? (
+                              <button disabled className="w-full rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">
+                                No link
+                              </button>
+                            ) : (
+                              <a
+                                href={action.href}
+                                target={application.channel === "email" ? undefined : "_blank"}
+                                rel={application.channel === "email" ? undefined : "noreferrer"}
+                                className="block w-full rounded-md border border-[#b9c7d8] px-3 py-2 text-center text-xs font-medium"
                               >
-                                {application.status}
-                              </span>
-                            </td>
-                            <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
-                            <td className="py-3 pr-4">
-                              {action.disabled ? (
-                                <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">
-                                  No link
-                                </button>
-                              ) : (
-                                <a
-                                  href={action.href}
-                                  target={application.channel === "email" ? undefined : "_blank"}
-                                  rel={application.channel === "email" ? undefined : "noreferrer"}
-                                  className="inline-flex rounded-md border border-[#b9c7d8] px-3 py-2 text-xs font-medium"
+                                {action.label}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[#d9e1ec] text-[#607083]">
+                          <th className="py-3 pr-4 font-medium">Job</th>
+                          <th className="py-3 pr-4 font-medium">Company</th>
+                          <th className="py-3 pr-4 font-medium">Source</th>
+                          <th className="py-3 pr-4 font-medium">Channel</th>
+                          <th className="py-3 pr-4 font-medium">Status</th>
+                          <th className="py-3 pr-4 font-medium">Applied at</th>
+                          <th className="py-3 pr-4 font-medium">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applications.map((application) => {
+                          const action = applicationAction(application);
+
+                          return (
+                            <tr key={application.id} className="border-b border-[#edf1f6]">
+                              <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
+                              <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
+                              <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
+                              <td className="py-3 pr-4 text-[#4b5b6c]">{application.channel}</td>
+                              <td className="py-3 pr-4">
+                                <span
+                                  className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                                    application.status === "applied"
+                                      ? "bg-[#e7f1ef] text-[#245b59]"
+                                      : application.status === "failed"
+                                        ? "bg-[#fdecec] text-[#9b1c1c]"
+                                        : "bg-[#f2f4f7] text-[#4b5b6c]"
+                                  }`}
                                 >
-                                  {action.label}
-                                </a>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                  {application.status}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
+                              <td className="py-3 pr-4">
+                                {action.disabled ? (
+                                  <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">
+                                    No link
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={action.href}
+                                    target={application.channel === "email" ? undefined : "_blank"}
+                                    rel={application.channel === "email" ? undefined : "noreferrer"}
+                                    className="inline-flex rounded-md border border-[#b9c7d8] px-3 py-2 text-xs font-medium"
+                                  >
+                                    {action.label}
+                                  </a>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
