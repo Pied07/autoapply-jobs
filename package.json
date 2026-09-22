@@ -18,7 +18,7 @@
     "mammoth": "^1.12.3",
     "next": "16.3.5",
     "nodemailer": "^10.0.10",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "puppeteer": "^25.11.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",

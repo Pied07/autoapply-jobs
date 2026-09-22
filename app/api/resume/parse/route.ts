@@ -2,14 +2,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
-if (typeof globalThis.DOMMatrix === "undefined") {
-  (globalThis as any).DOMMatrix = class DOMMatrix {};
-}
-if (typeof globalThis.Path2D === "undefined") {
-  (globalThis as any).Path2D = class Path2D {};
-}
 
-const { PDFParse } = require("pdf-parse");
 import { recognize } from "tesseract.js";
 import { parseResumeFromText } from "@/lib/resume/parser";
 import { refineParsedResumeProfile } from "@/lib/resume/huggingface-refiner";
@@ -54,23 +47,7 @@ async function runOcr(buffer: Buffer) {
   return result.data.text;
 }
 
-async function tryPdfOcr(buffer: Buffer) {
-  const parser = new PDFParse({ data: buffer });
-
-  try {
-    const screenshot = await parser.getScreenshot({
-      first: 1,
-      desiredWidth: 1800,
-      imageBuffer: true,
-      imageDataUrl: false,
-    });
-
-    const firstPage = screenshot.pages[0]?.data;
-    return firstPage ? await runOcr(Buffer.from(firstPage)) : "";
-  } finally {
-    await parser.destroy().catch(() => undefined);
-  }
-}
+const pdf = require("pdf-parse");
 
 async function extractText(file: File): Promise<ExtractResult> {
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -81,29 +58,18 @@ async function extractText(file: File): Promise<ExtractResult> {
   }
 
   if (name.endsWith(".pdf") || file.type === "application/pdf") {
-    const parser = new PDFParse({ data: buffer });
     let text = "";
-
     try {
-      const result = await parser.getText({
-        lineEnforce: true,
-        cellSeparator: " ",
-        itemJoiner: " ",
-        pageJoiner: "\n",
-      });
-      text = result.text;
-    } finally {
-      await parser.destroy().catch(() => undefined);
+      const data = await pdf(buffer);
+      text = data.text;
+    } catch (e) {
+      console.error("PDF parse error", e);
     }
 
     if (hasUsefulResumeText(text)) {
       return { text, method: "pdf-text" };
     }
 
-    const ocrText = await tryPdfOcr(buffer).catch(() => "");
-    if (hasUsefulResumeText(ocrText) || ocrText.length > text.length) {
-      return { text: ocrText, method: "pdf-ocr" };
-    }
 
     return { text, method: "pdf-text-low-confidence" };
   }
