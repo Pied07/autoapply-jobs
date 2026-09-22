@@ -1,4 +1,4 @@
-import type { NormalizedJob } from "@/types/job";
+import type { NormalizedJob, JobPlatform } from "@/types/job";
 import { normalizeJob } from "../normalizer";
 import type { IndianLocation } from "@/types/profile";
 
@@ -113,7 +113,7 @@ export async function fetchJobsFromJSearch(params: {
         company,
         location: isRemote ? "Remote" : (job.job_city || params.location),
         source: params.platformName as any,
-        platform: params.platformName,
+        platform: params.platformName as JobPlatform,
         applyChannel: extractedEmail ? "email" : "site",
         applyEmail: extractedEmail || undefined,
         applyUrl: applyUrl,

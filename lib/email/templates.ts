@@ -45,8 +45,8 @@ Platform applications: ${report.byChannel.platform}
 Company site applications: ${report.byChannel.site}
 Email applications: ${report.byChannel.email}
 
-LinkedIn: ${report.bySource.linkedin}
-Indeed: ${report.bySource.indeed}
-Naukri: ${report.bySource.naukri}`,
+LinkedIn: ${report.bySource.linkedin || 0}
+Indeed: ${report.bySource.indeed || 0}
+Naukri: ${report.bySource.naukri || 0}`,
   };
 }

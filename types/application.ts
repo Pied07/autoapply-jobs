@@ -24,7 +24,7 @@ export type ApplicationReport = {
   failed: number;
   skipped: number;
   byChannel: Record<ApplyChannel, number>;
-  bySource: Record<JobSource, number>;
+  bySource: Partial<Record<JobSource, number>>;
   rows: ApplicationRecord[];
 };
 

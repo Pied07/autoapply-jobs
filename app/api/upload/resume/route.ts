@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   uploadForm.set("public_id", publicId);
 
   if (hasUploadPreset) {
-    uploadForm.set("upload_preset", uploadPreset);
+    uploadForm.set("upload_preset", uploadPreset!);
   } else if (apiKey && apiSecret) {
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = signCloudinaryParams({ public_id: publicId, timestamp }, apiSecret);
@@ -61,9 +61,10 @@ export async function POST(request: Request) {
   }
 
   const data = await response.json();
-  return NextResponse.json({
-    url: data.secure_url,
-    filename: file.name,
+  const uploadData = {
+    url: data.secure_url || "",
+    filename: file.name || "",
     contentType: file.type || "application/octet-stream",
-  });
+  };
+  return NextResponse.json(uploadData);
 }

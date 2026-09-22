@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { ApplicationRecord, ApplicationReport } from "@/types/application";
+import type { JobSource } from "@/types/job";
 import type { CandidateProfile } from "@/types/profile";
 import { filterNewJobsForUser } from "@/lib/jobs/deduplicator";
 import { fetchJobsFromJSearch } from "@/lib/jobs/fetchers";
@@ -12,12 +13,12 @@ function reportFromRows(
   newRelevantJobs: number,
 ): ApplicationReport {
   const byChannel = { platform: 0, site: 0, email: 0 };
-  const bySource = { linkedin: 0, indeed: 0, naukri: 0 };
+  const bySource: Partial<Record<JobSource, number>> = {};
 
   for (const row of rows) {
     if (row.status === "applied") {
       byChannel[row.channel] += 1;
-      bySource[row.source] += 1;
+      bySource[row.source] = (bySource[row.source] || 0) + 1;
     }
   }
 

@@ -62,7 +62,7 @@ async function fetchRemoteOK(tags: string): Promise<NormalizedJob[]> {
   }
 
   // First element is metadata, skip it
-  return (Array.isArray(data) ? data : [])
+  const jobsList = (Array.isArray(data) ? data : [])
     .filter((j) => j.position || j.company)
     .slice(0, 20)
     .map((job: any): NormalizedJob | null => {
@@ -88,6 +88,6 @@ async function fetchRemoteOK(tags: string): Promise<NormalizedJob[]> {
     })
     .filter((j): j is NormalizedJob => j !== null);
 
-  console.log(`[RemoteOK] scraped ${jobs.length} jobs for tags="${tags}"`);
-  return jobs;
+  console.log(`[RemoteOK] scraped ${jobsList.length} jobs for tags="${tags}"`);
+  return jobsList;
 }

@@ -8,7 +8,7 @@ export function isRelevantJob(job: NormalizedJob, profile: CandidateProfile) {
     (job.salaryMax >= profile.salaryRange.min && job.salaryMin <= profile.salaryRange.max);
 
   return (
-    profile.preferredLocations.includes(job.location) &&
+    (profile.preferredLocations as string[]).includes(job.location) &&
     profile.workModes.includes(job.workMode) &&
     profile.jobTypes.includes(job.jobType) &&
     salaryOk
@@ -18,5 +18,5 @@ export function isRelevantJob(job: NormalizedJob, profile: CandidateProfile) {
 export function scoreJob(job: NormalizedJob, profile: CandidateProfile) {
   const text = `${job.title} ${job.description}`.toLowerCase();
   const skillHits = profile.skills.filter((skill) => text.includes(skill.toLowerCase())).length;
-  return skillHits * 10 + (profile.preferredLocations.includes(job.location) ? 5 : 0);
+  return skillHits * 10 + ((profile.preferredLocations as string[]).includes(job.location) ? 5 : 0);
 }

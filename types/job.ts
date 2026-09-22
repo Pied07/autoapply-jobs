@@ -24,7 +24,7 @@ export type NormalizedJob = {
   id: string;
   title: string;
   company: string;
-  location: IndianLocation;
+  location: string;
   source: JobSource;
   platform: JobPlatform;
   applyChannel: ApplyChannel;
