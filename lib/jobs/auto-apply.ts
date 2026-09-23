@@ -57,7 +57,7 @@ export async function attemptAutomatedApplication(
       }
     }
 
-    const page = await browser.newPage();
+    let page = await browser.newPage();
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     );
@@ -79,9 +79,22 @@ export async function attemptAutomatedApplication(
       const applyButtons = await page.$$("button, a");
       for (const btn of applyButtons) {
         const text = await btn.evaluate((el) => (el.textContent || "").toLowerCase().trim());
-        if (text === "apply" || text === "apply now" || text === "apply for this job") {
+        
+        if (text === "easy apply" || text === "apply" || text === "apply now" || text === "apply for this job") {
           await btn.click();
-          await new Promise((r) => setTimeout(r, 3000)); // wait for navigation or modal
+          await new Promise((r) => setTimeout(r, 5000)); // wait for navigation, modal, or new tab
+          
+          // If the button opened a new tab (e.g. LinkedIn external apply), switch our context to the new tab!
+          const pages = await browser.pages();
+          if (pages.length > 1) {
+            // The last page in the array is the most recently opened one
+            const latestPage = pages[pages.length - 1];
+            if (latestPage !== page) {
+              page = latestPage;
+              page.setDefaultTimeout(30000);
+              await new Promise((r) => setTimeout(r, 3000)); // wait for external ATS to fully render
+            }
+          }
           break;
         }
       }
@@ -134,10 +147,30 @@ export async function attemptAutomatedApplication(
         await submitButtons[0].click();
         await new Promise((r) => setTimeout(r, 5000)); // wait for submit to process
         
-        return {
-          status: "applied",
-          message: `Successfully filled basic details, ${resumeUploaded ? "uploaded resume," : "could not find resume upload field,"} and clicked submit.`,
-        };
+        // Verify success by checking page content
+        const bodyText = await page.evaluate(() => document.body.innerText.toLowerCase());
+        const successKeywords = [
+          "application submitted", 
+          "application received", 
+          "thank you for applying", 
+          "application has been sent",
+          "successfully applied",
+          "application complete"
+        ];
+        
+        const isSuccess = successKeywords.some(kw => bodyText.includes(kw));
+
+        if (isSuccess) {
+          return {
+            status: "applied",
+            message: `Successfully filled basic details, ${resumeUploaded ? "uploaded resume," : "could not find resume upload field,"} and verified submission success.`,
+          };
+        } else {
+          return {
+            status: "failed",
+            message: "Filled details and clicked submit, but could not verify a success message. Validation might have failed due to missing required fields.",
+          };
+        }
       } catch (e) {
         return {
           status: "failed",
