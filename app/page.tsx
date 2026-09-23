@@ -606,10 +606,25 @@ export default function Home() {
                     onClick={async () => {
                       setStatus("Running cron manually...");
                       try {
-                        const res = await fetch("/api/cron/daily");
-                        const data = await res.json();
-                        setStatus(data.ok ? "Cron executed successfully." : `Cron error: ${data.error}`);
-                        refreshDashboard(user!.uid);
+                        let more = true;
+                        let loopCount = 0;
+                        while (more && loopCount < 50) {
+                          const res = await fetch("/api/cron/daily");
+                          const data = await res.json();
+                          if (!data.ok) {
+                            setStatus(`Cron error: ${data.error}`);
+                            break;
+                          }
+                          more = data.hasMore;
+                          loopCount++;
+                          
+                          if (more) {
+                            setStatus(`Processing chunk ${loopCount}... Jobs remaining in queue. Please wait.`);
+                          } else {
+                            setStatus(`Finished! Processed all chunks.`);
+                          }
+                          refreshDashboard(user!.uid);
+                        }
                       } catch (e) {
                         setStatus("Failed to execute cron manually.");
                       }

@@ -118,50 +118,117 @@ export async function attemptAutomatedApplication(
       // ignore
     }
 
-    // Check if there's any recognizable form inputs
-    const inputs = await page.$$("input");
+    // Handle Multi-Step Forms (like LinkedIn Easy Apply)
+    let maxSteps = 10;
+    let stepCount = 0;
+    let clickedSubmit = false;
     let nameFound = false;
     let emailFound = false;
     let resumeUploaded = false;
 
-    for (const input of inputs) {
-      const type = await input.evaluate((el: any) => el.getAttribute("type")?.toLowerCase());
-      const name = await input.evaluate((el: any) => el.getAttribute("name")?.toLowerCase());
-      const id = await input.evaluate((el: any) => el.id.toLowerCase());
+    while (stepCount < maxSteps && !clickedSubmit) {
+      stepCount++;
       
-      const attrString = `${type} ${name} ${id}`;
-
-      if (type === "file" && tempResumePath && !resumeUploaded) {
+      // 1. Fill visible inputs on current step
+      const inputs = await page.$$("input");
+      for (const input of inputs) {
+        // Skip invisible inputs
+        let isVisible = false;
+        let type = "", name = "", id = "", val = "";
         try {
-          await input.uploadFile(tempResumePath);
-          resumeUploaded = true;
+          isVisible = await input.evaluate((el: any) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden';
+          });
+          if (!isVisible) continue;
+
+          type = await input.evaluate((el: any) => el.getAttribute("type")?.toLowerCase() || "");
+          name = await input.evaluate((el: any) => el.getAttribute("name")?.toLowerCase() || "");
+          id = await input.evaluate((el: any) => el.id.toLowerCase() || "");
+          val = await input.evaluate((el: any) => el.value);
         } catch (e) {
-          console.error("Failed to upload file", e);
+          continue; // Context destroyed or element removed, skip
         }
-      } else if (attrString.includes("email")) {
-        emailFound = true;
-        try { await input.type(profile.email || ""); } catch (e) {}
-      } else if (attrString.includes("name") || attrString.includes("first") || attrString.includes("last")) {
-        nameFound = true;
-        try { await input.type(profile.name || ""); } catch (e) {}
-      } else if (attrString.includes("phone") || attrString.includes("tel")) {
-        try { await input.type(profile.phone || "0000000000"); } catch (e) {}
+        
+        const attrString = `${type} ${name} ${id}`;
+
+        if (type === "file" && tempResumePath && !resumeUploaded) {
+          try {
+            await input.uploadFile(tempResumePath);
+            resumeUploaded = true;
+          } catch (e) {}
+        } else if (attrString.includes("email") && !val) {
+          emailFound = true;
+          try { await input.type(profile.email || ""); } catch (e) {}
+        } else if ((attrString.includes("name") || attrString.includes("first") || attrString.includes("last")) && !val) {
+          nameFound = true;
+          try { await input.type(profile.name || ""); } catch (e) {}
+        } else if ((attrString.includes("phone") || attrString.includes("tel") || attrString.includes("mobile")) && !val) {
+          try { await input.type(profile.phone || "0000000000"); } catch (e) {}
+        }
+      }
+
+      // 2. Look for action buttons (Next, Continue, Review, Submit)
+      const buttons = await page.$$("button, input[type='submit'], input[type='button']");
+      let movedForward = false;
+      let reviewOrNextButton = null;
+
+      for (const btn of buttons) {
+        // Skip invisible buttons
+        let isVisible = false;
+        let text = "";
+        try {
+          isVisible = await btn.evaluate((el: any) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden' && !el.disabled;
+          });
+          if (!isVisible) continue;
+
+          text = await btn.evaluate((el: any) => (el.textContent || el.value || "").toLowerCase().trim());
+        } catch (e) {
+          continue;
+        }
+        
+        // Final submit
+        if (text.includes("submit application") || text === "submit" || text === "apply" || text === "send" || text.includes("submit")) {
+          try {
+            await btn.click();
+            clickedSubmit = true;
+            movedForward = true;
+            await new Promise((r) => setTimeout(r, 4000));
+            break;
+          } catch(e) {}
+        } else if (text.includes("next") || text.includes("continue") || text.includes("review")) {
+          reviewOrNextButton = btn;
+        }
+      }
+
+      if (clickedSubmit) break;
+
+      // If we didn't find a submit button, try clicking Next/Review
+      if (reviewOrNextButton) {
+        try {
+          await reviewOrNextButton.click();
+          movedForward = true;
+          await new Promise((r) => setTimeout(r, 2000));
+        } catch(e) {}
+      }
+
+      // If we couldn't find a way to move forward, break the multi-step loop
+      if (!movedForward) {
+        break;
       }
     }
 
-    if (!nameFound && !emailFound) {
+    if (!nameFound && !emailFound && !clickedSubmit) {
       return {
         status: "failed",
         message: "Failed to locate standard application form fields (Name, Email) on the page. The ATS might be unsupported or requires login.",
       };
     }
 
-    // Click submit
-    const submitButtons = await page.$$("button[type='submit'], input[type='submit']");
-    if (submitButtons.length > 0) {
+    if (clickedSubmit) {
       try {
-        await submitButtons[0].click();
-        await new Promise((r) => setTimeout(r, 5000)); // wait for submit to process
         
         // Verify success by checking page content
         const bodyText = await page.evaluate(() => document.body.innerText.toLowerCase());
