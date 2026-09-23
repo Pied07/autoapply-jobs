@@ -40,7 +40,7 @@ async function run() {
   console.log(`URL: ${jobToTest.applyUrl}`);
   
   console.log("\nAttempting auto-apply via Puppeteer... (this might take up to 30 seconds)");
-  const result = await attemptAutomatedApplication(jobToTest.applyUrl, profile);
+  const result = await attemptAutomatedApplication(jobToTest.applyUrl as string, profile);
   
   console.log("\n=== Result ===");
   console.log(`Status: ${result.status}`);
