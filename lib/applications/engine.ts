@@ -39,7 +39,26 @@ function reportFromRows(
   };
 }
 
-async function applyToJob(profile: CandidateProfile, job: Awaited<ReturnType<typeof fetchJobsFromJSearch>>[number]) {
+export async function aggregateDailyReport(db: Firestore, uid: string, totalNewRelevantJobs: number): Promise<ApplicationReport> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const snapshot = await db
+    .collection("users")
+    .doc(uid)
+    .collection("applications")
+    .where("createdAt", ">=", today.toISOString())
+    .get();
+
+  const rows = snapshot.docs.map((doc) => doc.data() as ApplicationRecord);
+  return reportFromRows(uid, "daily", rows, totalNewRelevantJobs);
+}
+
+async function applyToJob(
+  profile: CandidateProfile, 
+  job: Awaited<ReturnType<typeof fetchJobsFromJSearch>>[number],
+  browser?: any
+) {
   if (job.applyChannel === "email" && !job.applyEmail) {
     return { status: "failed" as const, message: "Email application missing recruiter email." };
   }
@@ -51,7 +70,7 @@ async function applyToJob(profile: CandidateProfile, job: Awaited<ReturnType<typ
   // Attempt real automated application via the apply link
   if (job.applyUrl) {
     console.log(`[AutoApply] Attempting to apply for job: ${job.title} at ${job.company} via ${job.applyUrl}`);
-    const result = await attemptAutomatedApplication(job.applyUrl, profile);
+    const result = await attemptAutomatedApplication(job.applyUrl, profile, browser);
     return result;
   }
 
@@ -67,38 +86,58 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
 
   const allFreshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
   
-  // Vercel Serverless Function 504 Timeout Fix
-  // Processing 60 jobs sequentially with Puppeteer will exceed the 10-60s timeout limit.
-  // We limit it to 5 jobs per cron run. The remaining jobs will stay "fresh" and can be processed 
-  // on subsequent runs (e.g. if the user clicks the button again or runs cron hourly).
-  const freshJobs = allFreshJobs.slice(0, 5);
+  // Limit max jobs to prevent Vercel 300s timeout if backlog is huge
+  // 60 jobs in chunks of 5 will take ~60 seconds to complete
+  const CHUNK_SIZE = 5;
+  const MAX_JOBS = 60; 
+  const freshJobs = allFreshJobs.slice(0, MAX_JOBS);
   
   const rows: ApplicationRecord[] = [];
 
-  for (const job of freshJobs) {
-    const result = await applyToJob(profile, job);
-    const row: ApplicationRecord = {
-      id: `${profile.uid}-${job.id}-${Date.now()}`,
-      uid: profile.uid,
-      job,
-      status: result.status,
-      channel: job.applyChannel,
-      platform: job.platform,
-      source: job.source,
-      message: result.message,
-      createdAt: new Date().toISOString(),
-    };
+  const { getBrowser } = await import("@/lib/jobs/auto-apply");
+  const browser = await getBrowser();
+  
+  try {
+    for (let i = 0; i < freshJobs.length; i += CHUNK_SIZE) {
+      const chunk = freshJobs.slice(i, i + CHUNK_SIZE);
+      console.log(`[Engine] Processing chunk ${Math.floor(i/CHUNK_SIZE) + 1} of ${Math.ceil(freshJobs.length/CHUNK_SIZE)} (${chunk.length} jobs)`);
+      
+      const chunkResults = await Promise.all(
+        chunk.map(job => applyToJob(profile, job, browser))
+      );
 
-    // Save the job hash ONLY after we actually attempted it
-    const { saveJobHash } = await import("@/lib/jobs/deduplicator");
-    await saveJobHash(db, profile.uid, job);
+      for (let j = 0; j < chunk.length; j++) {
+        const job = chunk[j];
+        const result = chunkResults[j];
 
-    await db.collection("users").doc(profile.uid).collection("applications").doc(row.id).set(row);
-    rows.push(row);
+        const row: ApplicationRecord = {
+          id: `${profile.uid}-${job.id}-${Date.now()}`,
+          uid: profile.uid,
+          job,
+          status: result.status,
+          channel: job.applyChannel,
+          platform: job.platform,
+          source: job.source,
+          message: result.message,
+          createdAt: new Date().toISOString(),
+        };
+
+        const { saveJobHash } = await import("@/lib/jobs/deduplicator");
+        await saveJobHash(db, profile.uid, job);
+        await db.collection("users").doc(profile.uid).collection("applications").doc(row.id).set(row);
+        rows.push(row);
+      }
+    }
+  } finally {
+    await browser.close().catch(() => {});
   }
 
   // Pass the total fresh jobs count as newRelevantJobs so the dashboard shows the real backlog
-  const report = reportFromRows(profile.uid, "daily", rows, allFreshJobs.length);
+  const hasMore = allFreshJobs.length > 5;
+  const report = {
+    ...reportFromRows(profile.uid, "daily", rows, allFreshJobs.length),
+    hasMore,
+  };
   await db.collection("users").doc(profile.uid).collection("reports").add(report);
   return report;
 }

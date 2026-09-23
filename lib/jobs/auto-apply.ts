@@ -8,7 +8,7 @@ import type { CandidateProfile } from "@/types/profile";
 
 let executablePathPromise: Promise<string> | null = null;
 
-async function getBrowser() {
+export async function getBrowser() {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
     if (!executablePathPromise) {
       executablePathPromise = chromium.executablePath("https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar");
@@ -32,14 +32,17 @@ async function getBrowser() {
 
 export async function attemptAutomatedApplication(
   jobUrl: string,
-  profile: CandidateProfile
+  profile: CandidateProfile,
+  providedBrowser?: any
 ): Promise<{ status: "applied" | "failed"; message: string }> {
   if (!jobUrl) {
     return { status: "failed", message: "Job apply link is missing." };
   }
 
   let tempResumePath: string | null = null;
-  const browser = await getBrowser();
+  const browser = providedBrowser || await getBrowser();
+  const isOwnBrowser = !providedBrowser;
+  let page: any = null;
   
   try {
     // 1. Download Resume if available
@@ -57,7 +60,7 @@ export async function attemptAutomatedApplication(
       }
     }
 
-    let page = await browser.newPage();
+    page = await browser.newPage();
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     );
@@ -78,7 +81,7 @@ export async function attemptAutomatedApplication(
     try {
       const applyButtons = await page.$$("button, a");
       for (const btn of applyButtons) {
-        const text = await btn.evaluate((el) => (el.textContent || "").toLowerCase().trim());
+        const text = await btn.evaluate((el: any) => (el.textContent || "").toLowerCase().trim());
         
         if (text === "easy apply" || text === "apply" || text === "apply now" || text === "apply for this job") {
           await btn.click();
@@ -109,9 +112,9 @@ export async function attemptAutomatedApplication(
     let resumeUploaded = false;
 
     for (const input of inputs) {
-      const type = await input.evaluate((el) => el.getAttribute("type")?.toLowerCase());
-      const name = await input.evaluate((el) => el.getAttribute("name")?.toLowerCase());
-      const id = await input.evaluate((el) => el.id.toLowerCase());
+      const type = await input.evaluate((el: any) => el.getAttribute("type")?.toLowerCase());
+      const name = await input.evaluate((el: any) => el.getAttribute("name")?.toLowerCase());
+      const id = await input.evaluate((el: any) => el.id.toLowerCase());
       
       const attrString = `${type} ${name} ${id}`;
 
@@ -189,8 +192,11 @@ export async function attemptAutomatedApplication(
       message: `Browser automation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   } finally {
-    if (browser) {
-      await browser.close();
+    if (page) {
+      await page.close().catch(() => {});
+    }
+    if (browser && isOwnBrowser) {
+      await browser.close().catch(() => {});
     }
     if (tempResumePath) {
       try { await fs.unlink(tempResumePath); } catch (e) {}

@@ -34,12 +34,19 @@ export async function GET(request: Request) {
 
       try {
         const report = await runDailyApplications(db, profile);
-        const email = buildReportEmail(report);
-        const pdf = await createReportPdf(report);
+        
+        const jobsProcessedInChunk = report.applied + report.failed + report.skipped;
+        if (!report.hasMore && jobsProcessedInChunk > 0) {
+          const { aggregateDailyReport } = await import("@/lib/applications/engine");
+          const finalReport = await aggregateDailyReport(db, profile.uid, report.newRelevantJobs);
+          
+          const email = buildReportEmail(finalReport);
+          const pdf = await createReportPdf(finalReport);
 
-        await sendMail(profile.email, email.subject, email.text, [
-          { filename: "daily-job-report.pdf", content: pdf, contentType: "application/pdf" },
-        ]);
+          await sendMail(profile.email, email.subject, email.text, [
+            { filename: "daily-job-report.pdf", content: pdf, contentType: "application/pdf" },
+          ]);
+        }
 
         await writeUserCronLog(db, {
           uid: profile.uid,
@@ -54,7 +61,7 @@ export async function GET(request: Request) {
           message: `Daily cron completed. ${report.newRelevantJobs} relevant jobs found, ${report.applied} applied, ${report.failed} failed.`,
         });
 
-        reports.push({ uid: profile.uid, applied: report.applied, failed: report.failed });
+        reports.push({ uid: profile.uid, applied: report.applied, failed: report.failed, hasMore: report.hasMore, newRelevantJobs: report.newRelevantJobs });
       } catch (error) {
         await writeUserCronLog(db, {
           uid: profile.uid,
@@ -67,11 +74,12 @@ export async function GET(request: Request) {
           error: error instanceof Error ? error.message : "Unknown daily cron error",
         });
 
-        reports.push({ uid: profile.uid, applied: 0, failed: 1 });
+        reports.push({ uid: profile.uid, applied: 0, failed: 1, hasMore: false, newRelevantJobs: 0 });
       }
     }
 
-    return NextResponse.json({ ok: true, reports });
+    const hasMore = reports.some(r => r.hasMore);
+    return NextResponse.json({ ok: true, hasMore, reports });
   } catch (error) {
     return NextResponse.json(
       {
