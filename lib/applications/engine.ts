@@ -65,7 +65,13 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
     .filter((job) => isRelevantJob(job, profile))
     .sort((a, b) => scoreJob(b, profile) - scoreJob(a, profile));
 
-  let freshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
+  const allFreshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
+  
+  // Vercel Serverless Function 504 Timeout Fix
+  // Processing 60 jobs sequentially with Puppeteer will exceed the 10-60s timeout limit.
+  // We limit it to 5 jobs per cron run. The remaining jobs will stay "fresh" and can be processed 
+  // on subsequent runs (e.g. if the user clicks the button again or runs cron hourly).
+  const freshJobs = allFreshJobs.slice(0, 5);
   
   const rows: ApplicationRecord[] = [];
 
@@ -83,11 +89,16 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
       createdAt: new Date().toISOString(),
     };
 
+    // Save the job hash ONLY after we actually attempted it
+    const { saveJobHash } = await import("@/lib/jobs/deduplicator");
+    await saveJobHash(db, profile.uid, job);
+
     await db.collection("users").doc(profile.uid).collection("applications").doc(row.id).set(row);
     rows.push(row);
   }
 
-  const report = reportFromRows(profile.uid, "daily", rows, allJobs.length);
+  // Pass the total fresh jobs count as newRelevantJobs so the dashboard shows the real backlog
+  const report = reportFromRows(profile.uid, "daily", rows, allFreshJobs.length);
   await db.collection("users").doc(profile.uid).collection("reports").add(report);
   return report;
 }

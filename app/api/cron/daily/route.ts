@@ -7,6 +7,8 @@ import { createReportPdf } from "@/lib/reports/pdf";
 import { writeUserCronLog } from "@/lib/cron/logs";
 import type { CandidateProfile } from "@/types/profile";
 
+export const maxDuration = 300; // Allow 5 minutes on Vercel Pro
+
 function authorize(request: Request) {
   const expected = process.env.CRON_SECRET;
   return !expected || request.headers.get("authorization") === `Bearer ${expected}`;
