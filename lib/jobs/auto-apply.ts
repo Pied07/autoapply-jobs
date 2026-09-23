@@ -42,9 +42,12 @@ export async function attemptAutomatedApplication(
   let tempResumePath: string | null = null;
   const browser = providedBrowser || await getBrowser();
   const isOwnBrowser = !providedBrowser;
+  let context: any = null;
   let page: any = null;
   
   try {
+    context = await browser.createBrowserContext().catch(() => browser.createIncognitoBrowserContext().catch(() => browser));
+    
     // 1. Download Resume if available
     if (profile.resumeUrl) {
       try {
@@ -60,7 +63,7 @@ export async function attemptAutomatedApplication(
       }
     }
 
-    page = await browser.newPage();
+    page = await context.newPage();
     
     // SPEED OPTIMIZATION: Block images, fonts, and CSS to save massive CPU and Network overhead
     await page.setRequestInterception(true);
@@ -101,14 +104,27 @@ export async function attemptAutomatedApplication(
           await new Promise((r) => setTimeout(r, 5000)); // wait for navigation, modal, or new tab
           
           // If the button opened a new tab (e.g. LinkedIn external apply), switch our context to the new tab!
-          const pages = await browser.pages();
+          const pages = await context.pages();
           if (pages.length > 1) {
             // The last page in the array is the most recently opened one
             const latestPage = pages[pages.length - 1];
             if (latestPage !== page) {
               page = latestPage;
-              page.setDefaultTimeout(30000);
-              await new Promise((r) => setTimeout(r, 3000)); // wait for external ATS to fully render
+              page.setDefaultTimeout(15000);
+              await new Promise((r) => setTimeout(r, 4000)); // wait for external ATS to fully render
+              
+              // NEW: Some external sites require clicking "Apply" again before the form appears!
+              try {
+                const extButtons = await page.$$("button, a");
+                for (const eb of extButtons) {
+                  const etext = await eb.evaluate((el: any) => (el.textContent || "").toLowerCase().trim());
+                  if (etext === "apply" || etext === "apply now" || etext === "apply for this job") {
+                    await eb.click();
+                    await new Promise((r) => setTimeout(r, 4000));
+                    break;
+                  }
+                }
+              } catch (e) {}
             }
           }
           break;
@@ -274,6 +290,9 @@ export async function attemptAutomatedApplication(
   } finally {
     if (page) {
       await page.close().catch(() => {});
+    }
+    if (context) {
+      await context.close().catch(() => {});
     }
     if (browser && isOwnBrowser) {
       await browser.close().catch(() => {});
