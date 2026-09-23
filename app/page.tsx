@@ -604,34 +604,19 @@ export default function Home() {
                   </button>
                   <button
                     onClick={async () => {
-                      setStatus("Running cron manually...");
+                      setStatus("Processing 1 chunk (5 jobs)...");
                       try {
-                        let more = true;
-                        let loopCount = 0;
-                        while (more && loopCount < 50) {
-                          const res = await fetch("/api/cron/daily");
-                          const data = await res.json();
-                          if (!data.ok) {
-                            setStatus(`Cron error: ${data.error}`);
-                            break;
-                          }
-                          more = data.hasMore;
-                          loopCount++;
-                          
-                          if (more) {
-                            setStatus(`Processing chunk ${loopCount}... Jobs remaining in queue. Please wait.`);
-                          } else {
-                            setStatus(`Finished! Processed all chunks.`);
-                          }
-                          refreshDashboard(user!.uid);
-                        }
+                        const res = await fetch("/api/cron/daily");
+                        const data = await res.json();
+                        setStatus(data.ok ? "Chunk processed successfully." : `Cron error: ${data.error}`);
+                        refreshDashboard(user!.uid);
                       } catch (e) {
                         setStatus("Failed to execute cron manually.");
                       }
                     }}
                     className="rounded-md border border-[#b9c7d8] px-3 py-2 text-sm font-medium bg-[#245b59] text-white"
                   >
-                    Run Auto-Apply Now
+                    Process 1 Chunk (5 jobs)
                   </button>
                   <button
                     onClick={() => user && refreshDashboard(user.uid)}

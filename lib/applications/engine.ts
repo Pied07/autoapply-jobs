@@ -86,24 +86,19 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
 
   const allFreshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
   
-  // Process sequentially to prevent Vercel Out-Of-Memory (OOM) crashes.
-  // We don't need a hardcap on jobs because the 3.5 minute stopwatch below will safely pause 
-  // execution before a 504 Timeout occurs, allowing the frontend loop to pick up the rest!
-  const freshJobs = allFreshJobs;
+  // Limit to 5 jobs per cron run. This guarantees it finishes in ~30-60 seconds, 
+  // preventing Vercel 504 timeouts and OOM crashes (which happen if it runs too long).
+  // The cron will run every 30 minutes, continuously chewing through the backlog 24/7.
+  const MAX_JOBS = 5; 
+  const freshJobs = allFreshJobs.slice(0, MAX_JOBS);
   
   const rows: ApplicationRecord[] = [];
 
   const { getBrowser } = await import("@/lib/jobs/auto-apply");
   const browser = await getBrowser();
-  const startTime = Date.now();
   
   try {
     for (const job of freshJobs) {
-      if (Date.now() - startTime > 210000) {
-        console.warn("[Engine] Reached 3.5 minute mark. Stopping sequentially to prevent Vercel 504 Timeout.");
-        break;
-      }
-
       console.log(`[Engine] Processing job: ${job.title} at ${job.company}`);
       const result = await applyToJob(profile, job, browser);
 
