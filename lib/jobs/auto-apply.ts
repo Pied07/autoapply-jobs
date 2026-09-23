@@ -61,21 +61,34 @@ export async function attemptAutomatedApplication(
     }
 
     page = await browser.newPage();
+    
+    // SPEED OPTIMIZATION: Block images, fonts, and CSS to save massive CPU and Network overhead
+    await page.setRequestInterception(true);
+    page.on('request', (req: any) => {
+      const rt = req.resourceType();
+      if (['image', 'stylesheet', 'font', 'media', 'other'].includes(rt)) {
+        req.abort().catch(() => {});
+      } else {
+        req.continue().catch(() => {});
+      }
+    });
+
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     );
 
-    // Give it up to 30 seconds to load the job page
-    page.setDefaultTimeout(30000);
+    // Give it up to 15 seconds to load the job page
+    page.setDefaultTimeout(15000);
     
     try {
-      await page.goto(jobUrl, { waitUntil: "networkidle2" });
+      // Use domcontentloaded instead of networkidle2 to finish in 1-2 seconds instead of 15+ seconds
+      await page.goto(jobUrl, { waitUntil: "domcontentloaded" });
     } catch (e) {
       return { status: "failed", message: "Failed to load the job application page (timeout or network error)." };
     }
 
     // Wait a couple of seconds to ensure dynamic forms render
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 2000));
 
     // Try to find any "Apply" button to click if we are on a landing page rather than a form
     try {

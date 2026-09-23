@@ -96,9 +96,15 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
 
   const { getBrowser } = await import("@/lib/jobs/auto-apply");
   const browser = await getBrowser();
+  const startTime = Date.now();
   
   try {
     for (let i = 0; i < freshJobs.length; i += CHUNK_SIZE) {
+      if (Date.now() - startTime > 240000) {
+        console.warn("[Engine] Approaching 4-minute mark. Stopping to prevent Vercel 504 Timeout.");
+        break;
+      }
+
       const chunk = freshJobs.slice(i, i + CHUNK_SIZE);
       console.log(`[Engine] Processing chunk ${Math.floor(i/CHUNK_SIZE) + 1} of ${Math.ceil(freshJobs.length/CHUNK_SIZE)} (${chunk.length} jobs)`);
       
