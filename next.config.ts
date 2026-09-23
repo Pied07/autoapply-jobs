@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   allowedDevOrigins: ["192.168.0.194"],
   serverExternalPackages: ["pdf-parse", "pdfjs-dist", "tesseract.js", "puppeteer", "puppeteer-core", "@sparticuz/chromium", "firebase-admin", "jose", "jwks-rsa"],
+  experimental: {
+    outputFileTracingIncludes: {
+      "/api/**/*": ["./node_modules/@sparticuz/chromium/bin/**/*"],
+    },
+  },
 };
 
 export default nextConfig;

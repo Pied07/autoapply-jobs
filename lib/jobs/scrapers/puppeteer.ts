@@ -7,7 +7,9 @@ async function getBrowser() {
     return await puppeteerCore.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 720 },
-      executablePath: await chromium.executablePath(),
+      // Use the remote pack for Vercel to avoid the 50MB function limit and bundling issues.
+      // If you are using the full @sparticuz/chromium package, you can just use await chromium.executablePath()
+      executablePath: await chromium.executablePath("https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"),
       headless: (chromium as any).headless || "new",
     } as any);
   } else {
