@@ -604,7 +604,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={async () => {
-                      setStatus("Processing 1 chunk (5 jobs)...");
+                      setStatus("Processing 1 chunk (10 jobs)...");
                       try {
                         const res = await fetch("/api/cron/daily");
                         const data = await res.json();
@@ -616,7 +616,7 @@ export default function Home() {
                     }}
                     className="rounded-md border border-[#b9c7d8] px-3 py-2 text-sm font-medium bg-[#245b59] text-white"
                   >
-                    Process 1 Chunk (5 jobs)
+                    Process 1 Chunk (10 jobs)
                   </button>
                   <button
                     onClick={() => user && refreshDashboard(user.uid)}

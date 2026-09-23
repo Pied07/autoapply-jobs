@@ -36,7 +36,7 @@ export async function GET(request: Request) {
         const report = await runDailyApplications(db, profile);
         
         const jobsProcessedInChunk = report.applied + report.failed + report.skipped;
-        if (!report.hasMore && jobsProcessedInChunk > 0) {
+        if (jobsProcessedInChunk > 0) {
           const { aggregateDailyReport } = await import("@/lib/applications/engine");
           const finalReport = await aggregateDailyReport(db, profile.uid, report.newRelevantJobs);
           

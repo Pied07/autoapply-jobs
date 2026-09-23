@@ -86,10 +86,10 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
 
   const allFreshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
   
-  // Limit to 5 jobs per cron run. This guarantees it finishes in ~30-60 seconds, 
+  // Limit to 10 jobs per cron run. This guarantees it finishes in ~60-120 seconds, 
   // preventing Vercel 504 timeouts and OOM crashes (which happen if it runs too long).
-  // The cron will run every 30 minutes, continuously chewing through the backlog 24/7.
-  const MAX_JOBS = 5; 
+  // The user will use an external service (or manual clicks) to trigger it frequently.
+  const MAX_JOBS = 10; 
   const freshJobs = allFreshJobs.slice(0, MAX_JOBS);
   
   const rows: ApplicationRecord[] = [];
