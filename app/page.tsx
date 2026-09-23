@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -104,6 +104,7 @@ export default function Home() {
     newRelevant: 0,
     appliedToday: 0,
     failedToday: 0,
+    sources: {} as Record<string, number>,
   });
   const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
@@ -126,15 +127,29 @@ export default function Home() {
     const recentRows = recentSnapshot?.docs.map((applicationDoc) => applicationDoc.data() as ApplicationRecord) ?? [];
 
     setApplications(recentRows);
+    const sources = todayRows.reduce((acc, row) => {
+      acc[row.source] = (acc[row.source] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
     setDashboardStats({
       newRelevant: todayRows.length,
       appliedToday: todayRows.filter((row) => row.status === "applied").length,
       failedToday: todayRows.filter((row) => row.status === "failed").length,
+      sources,
     });
   }, []);
 
   const applicationAction = useCallback(
     (application: ApplicationRecord) => {
+      if (application.status === "applied") {
+        return {
+          href: application.job.applyUrl || "",
+          label: "View Application",
+          disabled: !application.job.applyUrl,
+        };
+      }
+
       if (application.channel === "email" && !application.job.applyUrl) {
         const email = buildApplicationEmail(profile, application.job.company, application.job.title);
         const recipient = application.job.applyEmail || "";
@@ -148,7 +163,7 @@ export default function Home() {
 
       return {
         href: application.job.applyUrl || "",
-        label: application.channel === "site" ? "Open site" : `Open ${application.source}`,
+        label: application.channel === "site" ? "Apply Manually" : `Open ${application.source}`,
         disabled: !application.job.applyUrl,
       };
     },
@@ -190,7 +205,7 @@ export default function Home() {
         setStep(savedProfile.profileCompleted ? "dashboard" : "profile");
       } else {
         setProfile(emptyProfile);
-        setDashboardStats({ newRelevant: 0, appliedToday: 0, failedToday: 0 });
+        setDashboardStats({ newRelevant: 0, appliedToday: 0, failedToday: 0, sources: {} });
         setCronLogs([]);
         setApplications([]);
         setStep("login");
@@ -691,6 +706,21 @@ export default function Home() {
                   </ResponsiveContainer>
                 </div>
               </div>
+
+              <div className="border border-[#d9e1ec] bg-white p-5">
+                <h3 className="mb-4 text-lg font-semibold">Jobs by Source (Today)</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={Object.entries(dashboardStats.sources).map(([name, value]) => ({ name, value }))}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} allowDecimals={false} />
+                      <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                      <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
 
             <div className="border border-[#d9e1ec] bg-white p-4 md:p-5">
@@ -726,9 +756,16 @@ export default function Home() {
                               {action.disabled ? (
                                 <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">No link</button>
                               ) : (
-                                <a href={action.href} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#b9c7d8] px-3 py-2 text-xs font-medium">
-                                  {action.label}
-                                </a>
+                                <div className="flex gap-2">
+                                  <a href={action.href} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#b9c7d8] px-3 py-2 text-xs font-medium">
+                                    {action.label}
+                                  </a>
+                                  {application.status === 'applied' && (
+                                    <a href={application.job.applyUrl || "#"} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#2563eb] text-[#2563eb] px-3 py-2 text-xs font-medium">
+                                      Apply Link
+                                    </a>
+                                  )}
+                                </div>
                               )}
                             </td>
                           </tr>
