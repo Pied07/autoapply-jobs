@@ -6,12 +6,20 @@ import path from "path";
 import os from "os";
 import type { CandidateProfile } from "@/types/profile";
 
+let executablePathPromise: Promise<string> | null = null;
+
 async function getBrowser() {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    if (!executablePathPromise) {
+      executablePathPromise = chromium.executablePath("https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar");
+    }
+    
+    const executablePath = await executablePathPromise;
+    
     return await puppeteerCore.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: (chromium as any).defaultViewport || { width: 1280, height: 720 },
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: (chromium as any).headless || "new",
     } as any);
   } else {
