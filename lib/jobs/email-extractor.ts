@@ -248,9 +248,13 @@ export async function enrichJobsWithCareerEmails(jobs: NormalizedJob[], maxJobs 
       }
 
       if (found) {
+        // Only set applyChannel to email if the job didn't already have a valid platform/site link
+        // Otherwise, just attach the email as a backup/metadata
+        const shouldOverrideChannel = job.applyChannel === "email" || !job.applyUrl;
+        
         enriched[current] = {
           ...job,
-          applyChannel: "email",
+          applyChannel: shouldOverrideChannel ? "email" : job.applyChannel,
           applyEmail: found.email,
           isGuessedEmail: found.isGuessed,
           description: job.description.includes(found.email) ? job.description : `${job.description} ${found.isGuessed ? 'Guessed' : 'Suggested'} email: ${found.email}`.trim(),

@@ -135,7 +135,7 @@ export default function Home() {
 
   const applicationAction = useCallback(
     (application: ApplicationRecord) => {
-      if (application.channel === "email") {
+      if (application.channel === "email" && !application.job.applyUrl) {
         const email = buildApplicationEmail(profile, application.job.company, application.job.title);
         const recipient = application.job.applyEmail || "";
 
@@ -703,7 +703,7 @@ export default function Home() {
                 <p className="text-sm text-[#4b5b6c]">No successful applications yet.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[600px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-[#d9e1ec] text-[#607083]">
                         <th className="py-3 pr-4 font-medium">Job</th>
@@ -750,7 +750,7 @@ export default function Home() {
                 <p className="text-sm text-[#4b5b6c]">No failed applications.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[600px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-[#d9e1ec] text-[#607083]">
                         <th className="py-3 pr-4 font-medium">Job</th>
@@ -769,7 +769,7 @@ export default function Home() {
                             <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
-                            <td className="py-3 pr-4 text-[#9b1c1c] max-w-[200px] truncate" title={application.message}>{application.message}</td>
+                            <td className="py-3 pr-4 text-[#9b1c1c] text-xs">{application.message}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
                             <td className="py-3 pr-4">
                               {action.disabled ? (
