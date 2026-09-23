@@ -35,18 +35,15 @@ export async function GET(request: Request) {
       try {
         const report = await runDailyApplications(db, profile);
         
-        const jobsProcessedInChunk = report.applied + report.failed + report.skipped;
-        if (jobsProcessedInChunk > 0) {
-          const { aggregateDailyReport } = await import("@/lib/applications/engine");
-          const finalReport = await aggregateDailyReport(db, profile.uid, report.newRelevantJobs);
-          
-          const email = buildReportEmail(finalReport);
-          const pdf = await createReportPdf(finalReport);
+        const { aggregateDailyReport } = await import("@/lib/applications/engine");
+        const finalReport = await aggregateDailyReport(db, profile.uid, report.newRelevantJobs);
+        
+        const email = buildReportEmail(finalReport);
+        const pdf = await createReportPdf(finalReport);
 
-          await sendMail(profile.email, email.subject, email.text, [
-            { filename: "daily-job-report.pdf", content: pdf, contentType: "application/pdf" },
-          ]);
-        }
+        await sendMail(profile.email, email.subject, email.text, [
+          { filename: "daily-job-report.pdf", content: pdf, contentType: "application/pdf" },
+        ]);
 
         await writeUserCronLog(db, {
           uid: profile.uid,

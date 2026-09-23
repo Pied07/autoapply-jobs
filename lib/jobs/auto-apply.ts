@@ -97,10 +97,10 @@ export async function attemptAutomatedApplication(
     try {
       const applyButtons = await page.$$("button, a");
       for (const btn of applyButtons) {
-        const text = await btn.evaluate((el: any) => (el.textContent || "").toLowerCase().trim());
+        const text = await btn.evaluate((el: any) => (el.textContent || el.value || "").toLowerCase().trim());
         
-        if (text === "easy apply" || text === "apply" || text === "apply now" || text === "apply for this job") {
-          await btn.click();
+        if (text === "easy apply" || text === "apply" || text === "apply now" || text === "apply for this job" || text.includes("apply to this") || text.includes("apply externally")) {
+          await btn.evaluate((b: any) => b.click());
           await new Promise((r) => setTimeout(r, 5000)); // wait for navigation, modal, or new tab
           
           // If the button opened a new tab (e.g. LinkedIn external apply), switch our context to the new tab!
@@ -119,7 +119,7 @@ export async function attemptAutomatedApplication(
                 for (const eb of extButtons) {
                   const etext = await eb.evaluate((el: any) => (el.textContent || "").toLowerCase().trim());
                   if (etext === "apply" || etext === "apply now" || etext === "apply for this job") {
-                    await eb.click();
+                    await eb.evaluate((b: any) => b.click());
                     await new Promise((r) => setTimeout(r, 4000));
                     break;
                   }
@@ -152,13 +152,16 @@ export async function attemptAutomatedApplication(
         let isVisible = false;
         let type = "", name = "", id = "", val = "";
         try {
-          isVisible = await input.evaluate((el: any) => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden';
-          });
-          if (!isVisible) continue;
-
           type = await input.evaluate((el: any) => el.getAttribute("type")?.toLowerCase() || "");
+          
+          if (type !== "file") {
+            isVisible = await input.evaluate((el: any) => {
+              const rect = el.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden';
+            });
+            if (!isVisible) continue;
+          }
+
           name = await input.evaluate((el: any) => el.getAttribute("name")?.toLowerCase() || "");
           id = await input.evaluate((el: any) => el.id.toLowerCase() || "");
           val = await input.evaluate((el: any) => el.value);
@@ -238,7 +241,7 @@ export async function attemptAutomatedApplication(
         // Final submit
         if (text.includes("submit application") || text === "submit" || text === "apply" || text === "send" || text.includes("submit")) {
           try {
-            await btn.click();
+            await btn.evaluate((b: any) => b.click());
             clickedSubmit = true;
             movedForward = true;
             await new Promise((r) => setTimeout(r, 4000));
@@ -254,7 +257,7 @@ export async function attemptAutomatedApplication(
       // If we didn't find a submit button, try clicking Next/Review
       if (reviewOrNextButton) {
         try {
-          await reviewOrNextButton.click();
+          await reviewOrNextButton.evaluate((b: any) => b.click());
           movedForward = true;
           await new Promise((r) => setTimeout(r, 2000));
         } catch(e) {}

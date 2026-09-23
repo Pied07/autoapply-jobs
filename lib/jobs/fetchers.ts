@@ -57,12 +57,22 @@ export async function fetchJobs(params: JobSearchParams): Promise<NormalizedJob[
     freshersworld:  () => Promise.resolve([]),
   };
 
+  // Run scrapers with a hard 30-second timeout to prevent Vercel 504 errors
+  const timeoutPromise = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+    ]);
+  };
+
   const tasks = sources
     .filter((s) => s in scraperMap)
-    .map((s) => scraperMap[s]());
+    .map((s) => timeoutPromise(scraperMap[s](), 30000, [] as NormalizedJob[]));
 
-  const results = await Promise.all(tasks);
-  const all = results.flat();
+  const results = await Promise.allSettled(tasks);
+  const all = results
+    .map(r => r.status === 'fulfilled' ? r.value : [])
+    .flat();
 
   // Dedupe by title+company
   const seen = new Set<string>();
