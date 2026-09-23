@@ -40,6 +40,7 @@ export type CandidateProfile = {
   currentSalary?: string;
   expectedSalary?: string;
   noticePeriod?: string;
+  yearsOfExperience?: string;
   dailyApplyTime: string;
   profileCompleted: boolean;
   autoApplyEnabled?: boolean;

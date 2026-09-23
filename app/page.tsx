@@ -142,11 +142,14 @@ export default function Home() {
 
   const applicationAction = useCallback(
     (application: ApplicationRecord) => {
+      const fallbackUrl = `https://www.google.com/search?q=${encodeURIComponent(application.job.company + ' careers')}`;
+      const url = application.job.applyUrl || fallbackUrl;
+
       if (application.status === "applied") {
         return {
-          href: application.job.applyUrl || "",
+          href: url,
           label: "View Application",
-          disabled: !application.job.applyUrl,
+          disabled: false,
         };
       }
 
@@ -162,9 +165,9 @@ export default function Home() {
       }
 
       return {
-        href: application.job.applyUrl || "",
+        href: url,
         label: application.channel === "site" ? "Apply Manually" : `Open ${application.source}`,
-        disabled: !application.job.applyUrl,
+        disabled: false,
       };
     },
     [profile],
@@ -551,7 +554,7 @@ export default function Home() {
                 </label>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-4 mt-4">
                 <label className="grid gap-2 text-sm font-medium">
                   Current salary
                   <input value={profile.currentSalary || ""} onChange={(e) => setProfile({ ...profile, currentSalary: e.target.value })} placeholder="e.g. 5 LPA" className="h-11 border border-[#cfd8e5] px-3 font-normal" />
@@ -563,6 +566,10 @@ export default function Home() {
                 <label className="grid gap-2 text-sm font-medium">
                   Notice period
                   <input value={profile.noticePeriod || ""} onChange={(e) => setProfile({ ...profile, noticePeriod: e.target.value })} placeholder="e.g. 30 Days" className="h-11 border border-[#cfd8e5] px-3 font-normal" />
+                </label>
+                <label className="grid gap-2 text-sm font-medium">
+                  Years of Exp.
+                  <input type="number" min="0" max="50" value={profile.yearsOfExperience || ""} onChange={(e) => setProfile({ ...profile, yearsOfExperience: e.target.value })} placeholder="e.g. 4" className="h-11 border border-[#cfd8e5] px-3 font-normal" />
                 </label>
               </div>
 
@@ -761,7 +768,7 @@ export default function Home() {
                                     {action.label}
                                   </a>
                                   {application.status === 'applied' && (
-                                    <a href={application.job.applyUrl || "#"} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#2563eb] text-[#2563eb] px-3 py-2 text-xs font-medium">
+                                    <a href={application.job.applyUrl || `https://www.google.com/search?q=${encodeURIComponent(application.job.company + ' careers')}`} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#2563eb] text-[#2563eb] px-3 py-2 text-xs font-medium">
                                       Apply Link
                                     </a>
                                   )}

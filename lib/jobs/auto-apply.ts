@@ -181,7 +181,37 @@ export async function attemptAutomatedApplication(
           try { await input.type(profile.name || ""); } catch (e) {}
         } else if ((attrString.includes("phone") || attrString.includes("tel") || attrString.includes("mobile")) && !val) {
           try { await input.type(profile.phone || "0000000000"); } catch (e) {}
+        } else if (type === "radio" || type === "checkbox") {
+          // Brute-force radios (usually "Yes")
+          try { await input.evaluate((el: any) => el.click()); } catch(e){}
+        } else if (!val && (type === "text" || type === "number" || !type)) {
+          // Brute-force custom text/number questions
+          try {
+            if (attrString.includes("year") || type === "number") await input.type(profile.yearsOfExperience || "4");
+            else if (attrString.includes("city") || attrString.includes("loc")) await input.type(profile.preferredLocations[0] || "India");
+            else if (attrString.includes("salary") || attrString.includes("pay") || attrString.includes("ctc")) await input.type(profile.expectedSalary || "1000000");
+            else await input.type("Yes");
+          } catch(e){}
         }
+      }
+
+      // Brute-force dropdowns
+      const selects = await page.$$("select");
+      for (const sel of selects) {
+        try {
+          const isVisible = await sel.evaluate((el: any) => window.getComputedStyle(el).visibility !== 'hidden');
+          if (!isVisible) continue;
+          
+          const val = await sel.evaluate((el: any) => el.value);
+          if (!val || val.toLowerCase().includes("select")) {
+             await sel.evaluate((el: any) => {
+                if (el.options.length > 1) {
+                  el.selectedIndex = 1;
+                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+             });
+          }
+        } catch(e){}
       }
 
       // 2. Look for action buttons (Next, Continue, Review, Submit)
