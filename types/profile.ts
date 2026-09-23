@@ -42,6 +42,7 @@ export type CandidateProfile = {
   noticePeriod?: string;
   dailyApplyTime: string;
   profileCompleted: boolean;
+  autoApplyEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 };

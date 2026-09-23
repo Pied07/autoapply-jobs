@@ -19,7 +19,11 @@ export async function GET(request: Request) {
 
   try {
     const db = getAdminDb();
-    const users = await db.collection("users").where("profileCompleted", "==", true).get();
+    const users = await db
+      .collection("users")
+      .where("profileCompleted", "==", true)
+      .where("autoApplyEnabled", "==", true)
+      .get();
     const reports = [];
 
     for (const doc of users.docs) {

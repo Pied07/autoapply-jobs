@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -361,6 +362,19 @@ export default function Home() {
     setStatus("Signed out.");
   }
 
+  async function toggleAutoApply() {
+    if (!user) return;
+    const newValue = !profile.autoApplyEnabled;
+    setStatus(newValue ? "Enabling auto apply..." : "Disabling auto apply...");
+    try {
+      await setDoc(doc(db, "users", user.uid), { autoApplyEnabled: newValue }, { merge: true });
+      setProfile((current) => ({ ...current, autoApplyEnabled: newValue }));
+      setStatus(`Auto apply is now ${newValue ? "ON" : "OFF"}`);
+    } catch (e) {
+      setStatus("Failed to update auto apply setting.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f8fb] text-[#17202a]">
       <section className="border-b border-[#d9e1ec] bg-white">
@@ -560,7 +574,8 @@ export default function Home() {
                 </div>
               </div>
 
-              <button onClick={saveProfile} className="h-11 w-fit rounded-md bg-[#245b59] px-5 font-semibold text-white">Save and enable automation</button>
+
+              <button onClick={saveProfile} className="h-11 w-fit rounded-md bg-[#245b59] px-5 font-semibold text-white">Save profile</button>
               <p className="text-sm text-[#607083]">{status}</p>
             </div>
           </section>
@@ -588,6 +603,22 @@ export default function Home() {
                     View logs
                   </button>
                   <button
+                    onClick={async () => {
+                      setStatus("Running cron manually...");
+                      try {
+                        const res = await fetch("/api/cron/daily");
+                        const data = await res.json();
+                        setStatus(data.ok ? "Cron executed successfully." : `Cron error: ${data.error}`);
+                        refreshDashboard(user!.uid);
+                      } catch (e) {
+                        setStatus("Failed to execute cron manually.");
+                      }
+                    }}
+                    className="rounded-md border border-[#b9c7d8] px-3 py-2 text-sm font-medium bg-[#245b59] text-white"
+                  >
+                    Run Auto-Apply Now
+                  </button>
+                  <button
                     onClick={() => user && refreshDashboard(user.uid)}
                     className="rounded-md border border-[#b9c7d8] px-3 py-2 text-sm font-medium"
                   >
@@ -603,6 +634,18 @@ export default function Home() {
                 LinkedIn/Indeed/Naukri totals. Weekly report clears that week&apos;s application history after email.
               </p>
             </div>
+            <div className="border border-[#d9e1ec] bg-white p-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Automatic Background Apply</h3>
+                <p className="text-sm text-[#4b5b6c]">When enabled, the system will apply to new jobs daily at {profile.dailyApplyTime} IST.</p>
+              </div>
+              <button 
+                onClick={toggleAutoApply}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${profile.autoApplyEnabled ? 'bg-[#245b59]' : 'bg-[#cfd8e5]'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${profile.autoApplyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[
                 ["New relevant", dashboardStats.newRelevant.toString()],
@@ -616,128 +659,132 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="border border-[#d9e1ec] bg-white p-5">
+                <h3 className="mb-4 text-lg font-semibold">Application Status (Today)</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Applied', value: dashboardStats.appliedToday, color: '#245b59' },
+                          { name: 'Failed', value: dashboardStats.failedToday, color: '#9b1c1c' },
+                          { name: 'Pending', value: Math.max(0, dashboardStats.newRelevant - dashboardStats.appliedToday - dashboardStats.failedToday), color: '#cfd8e5' }
+                        ]}
+                        dataKey="value"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                      >
+                        {[
+                          { name: 'Applied', value: dashboardStats.appliedToday, color: '#245b59' },
+                          { name: 'Failed', value: dashboardStats.failedToday, color: '#9b1c1c' },
+                          { name: 'Pending', value: Math.max(0, dashboardStats.newRelevant - dashboardStats.appliedToday - dashboardStats.failedToday), color: '#cfd8e5' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
             <div className="border border-[#d9e1ec] bg-white p-4 md:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold">Applied jobs</h3>
-                <p className="text-sm text-[#607083]">{applications.length} records</p>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h3 className="text-lg font-semibold text-[#245b59]">Successfully Applied Jobs</h3>
+                <p className="text-sm text-[#607083]">{applications.filter(a => a.status === 'applied').length} records</p>
               </div>
 
-              {applications.length === 0 ? (
-                <p className="mt-4 text-sm text-[#4b5b6c]">
-                  No applications have been recorded yet. This means the daily cron has not successfully created
-                  application records for your account.
-                </p>
+              {applications.filter(a => a.status === 'applied').length === 0 ? (
+                <p className="text-sm text-[#4b5b6c]">No successful applications yet.</p>
               ) : (
-                <div className="mt-4">
-                  {/* Mobile Cards View */}
-                  <div className="grid gap-4 md:hidden">
-                    {applications.map((application) => {
-                      const action = applicationAction(application);
-                      return (
-                        <div key={application.id} className="rounded-md border border-[#edf1f6] p-4 text-sm">
-                          <div className="mb-2 flex items-start justify-between gap-2">
-                            <div>
-                              <p className="font-medium text-[#17202a]">{application.job.title}</p>
-                              <p className="text-[#4b5b6c]">{application.job.company}</p>
-                            </div>
-                            <span
-                              className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                                application.status === "applied"
-                                  ? "bg-[#e7f1ef] text-[#245b59]"
-                                  : application.status === "failed"
-                                    ? "bg-[#fdecec] text-[#9b1c1c]"
-                                    : "bg-[#f2f4f7] text-[#4b5b6c]"
-                              }`}
-                            >
-                              {application.status}
-                            </span>
-                          </div>
-                          <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-[#607083]">
-                            <p>Source: <span className="font-medium text-[#4b5b6c]">{application.source}</span></p>
-                            <p>Channel: <span className="font-medium text-[#4b5b6c]">{application.channel}</span></p>
-                            <p className="col-span-2">Time: <span className="font-medium text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</span></p>
-                          </div>
-                          <div>
-                            {action.disabled ? (
-                              <button disabled className="w-full rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">
-                                No link
-                              </button>
-                            ) : (
-                              <a
-                                href={action.href}
-                                target={application.channel === "email" ? undefined : "_blank"}
-                                rel={application.channel === "email" ? undefined : "noreferrer"}
-                                className="block w-full rounded-md border border-[#b9c7d8] px-3 py-2 text-center text-xs font-medium"
-                              >
-                                {action.label}
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[#d9e1ec] text-[#607083]">
+                        <th className="py-3 pr-4 font-medium">Job</th>
+                        <th className="py-3 pr-4 font-medium">Company</th>
+                        <th className="py-3 pr-4 font-medium">Source</th>
+                        <th className="py-3 pr-4 font-medium">Applied at</th>
+                        <th className="py-3 pr-4 font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications.filter(a => a.status === 'applied').map((application) => {
+                        const action = applicationAction(application);
+                        return (
+                          <tr key={application.id} className="border-b border-[#edf1f6]">
+                            <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
+                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
+                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
+                            <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
+                            <td className="py-3 pr-4">
+                              {action.disabled ? (
+                                <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">No link</button>
+                              ) : (
+                                <a href={action.href} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#b9c7d8] px-3 py-2 text-xs font-medium">
+                                  {action.label}
+                                </a>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
-                  {/* Desktop Table View */}
-                  <div className="hidden overflow-x-auto md:block">
-                    <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-[#d9e1ec] text-[#607083]">
-                          <th className="py-3 pr-4 font-medium">Job</th>
-                          <th className="py-3 pr-4 font-medium">Company</th>
-                          <th className="py-3 pr-4 font-medium">Source</th>
-                          <th className="py-3 pr-4 font-medium">Channel</th>
-                          <th className="py-3 pr-4 font-medium">Status</th>
-                          <th className="py-3 pr-4 font-medium">Applied at</th>
-                          <th className="py-3 pr-4 font-medium">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {applications.map((application) => {
-                          const action = applicationAction(application);
+            <div className="border border-[#d9e1ec] bg-white p-4 md:p-5 mt-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h3 className="text-lg font-semibold text-[#9b1c1c]">Failed Applications (Manual Apply)</h3>
+                <p className="text-sm text-[#607083]">{applications.filter(a => a.status === 'failed').length} records</p>
+              </div>
 
-                          return (
-                            <tr key={application.id} className="border-b border-[#edf1f6]">
-                              <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
-                              <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
-                              <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
-                              <td className="py-3 pr-4 text-[#4b5b6c]">{application.channel}</td>
-                              <td className="py-3 pr-4">
-                                <span
-                                  className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                                    application.status === "applied"
-                                      ? "bg-[#e7f1ef] text-[#245b59]"
-                                      : application.status === "failed"
-                                        ? "bg-[#fdecec] text-[#9b1c1c]"
-                                        : "bg-[#f2f4f7] text-[#4b5b6c]"
-                                  }`}
-                                >
-                                  {application.status}
-                                </span>
-                              </td>
-                              <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
-                              <td className="py-3 pr-4">
-                                {action.disabled ? (
-                                  <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">
-                                    No link
-                                  </button>
-                                ) : (
-                                  <a
-                                    href={action.href}
-                                    target={application.channel === "email" ? undefined : "_blank"}
-                                    rel={application.channel === "email" ? undefined : "noreferrer"}
-                                    className="inline-flex rounded-md border border-[#b9c7d8] px-3 py-2 text-xs font-medium"
-                                  >
-                                    {action.label}
-                                  </a>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+              {applications.filter(a => a.status === 'failed').length === 0 ? (
+                <p className="text-sm text-[#4b5b6c]">No failed applications.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[#d9e1ec] text-[#607083]">
+                        <th className="py-3 pr-4 font-medium">Job</th>
+                        <th className="py-3 pr-4 font-medium">Company</th>
+                        <th className="py-3 pr-4 font-medium">Source</th>
+                        <th className="py-3 pr-4 font-medium">Failure Reason</th>
+                        <th className="py-3 pr-4 font-medium">Failed at</th>
+                        <th className="py-3 pr-4 font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications.filter(a => a.status === 'failed').map((application) => {
+                        const action = applicationAction(application);
+                        return (
+                          <tr key={application.id} className="border-b border-[#edf1f6]">
+                            <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
+                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
+                            <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
+                            <td className="py-3 pr-4 text-[#9b1c1c] max-w-[200px] truncate" title={application.message}>{application.message}</td>
+                            <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
+                            <td className="py-3 pr-4">
+                              {action.disabled ? (
+                                <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">No link</button>
+                              ) : (
+                                <a href={action.href} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#9b1c1c] text-[#9b1c1c] px-3 py-2 text-xs font-medium">
+                                  Apply Manually
+                                </a>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

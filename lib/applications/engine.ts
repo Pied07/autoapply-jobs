@@ -6,6 +6,8 @@ import { filterNewJobsForUser } from "@/lib/jobs/deduplicator";
 import { fetchJobsFromJSearch } from "@/lib/jobs/fetchers";
 import { isRelevantJob, scoreJob } from "@/lib/jobs/matcher";
 
+import { attemptAutomatedApplication } from "@/lib/jobs/auto-apply";
+
 function reportFromRows(
   uid: string,
   period: ApplicationReport["period"],
@@ -42,12 +44,18 @@ async function applyToJob(profile: CandidateProfile, job: Awaited<ReturnType<typ
     return { status: "failed" as const, message: "Email application missing recruiter email." };
   }
 
-  const message =
-    job.applyChannel === "email"
-      ? `Prepared reusable email template for ${profile.name}.`
-      : `Queued ${job.applyChannel === "site" ? "company website" : job.platform} application.`;
+  if (job.applyChannel === "email") {
+    return { status: "applied" as const, message: `Prepared reusable email template for ${profile.name}.` };
+  }
 
-  return { status: "applied" as const, message };
+  // Attempt real automated application via the apply link
+  if (job.applyUrl) {
+    console.log(`[AutoApply] Attempting to apply for job: ${job.title} at ${job.company} via ${job.applyUrl}`);
+    const result = await attemptAutomatedApplication(job.applyUrl, profile);
+    return result;
+  }
+
+  return { status: "failed" as const, message: "No apply link available to automate." };
 }
 
 export async function runDailyApplications(db: Firestore, profile: CandidateProfile) {
@@ -57,7 +65,8 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
     .filter((job) => isRelevantJob(job, profile))
     .sort((a, b) => scoreJob(b, profile) - scoreJob(a, profile));
 
-  const freshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
+  let freshJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
+  
   const rows: ApplicationRecord[] = [];
 
   for (const job of freshJobs) {
