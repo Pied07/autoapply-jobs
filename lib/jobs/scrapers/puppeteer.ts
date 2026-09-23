@@ -35,11 +35,18 @@ export async function fetchWithPuppeteer(url: string, waitForSelector?: string, 
     // Set a common user agent to bypass simple blocks
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
     
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const type = req.resourceType();
+      if (type === "image" || type === "stylesheet" || type === "font" || type === "media") req.abort();
+      else req.continue();
+    });
+    
     if (headers) {
       await page.setExtraHTTPHeaders(headers);
     }
 
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     
     if (waitForSelector) {
       try {
@@ -65,7 +72,15 @@ export async function extractFromPage<T>(url: string, evaluateFn: string): Promi
   try {
     const page = await browser.newPage();
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
+    
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const type = req.resourceType();
+      if (type === "image" || type === "stylesheet" || type === "font" || type === "media") req.abort();
+      else req.continue();
+    });
+
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     
     // Give it a second to render
     await new Promise(r => setTimeout(r, 2000));

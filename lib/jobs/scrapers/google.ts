@@ -26,7 +26,7 @@ export async function scrapeGoogleJobs(params: {
           if (scrollContainer === window) {
             window.scrollBy(0, 1000);
           } else {
-            (scrollContainer as HTMLElement).scrollTop += 1000;
+            scrollContainer.scrollTop += 1000;
           }
           scrolls++;
           
@@ -35,11 +35,11 @@ export async function scrapeGoogleJobs(params: {
             
             // Extract the jobs from 'li' elements which represent the job cards
             const items = Array.from(document.querySelectorAll('li')).map(li => {
-              const textParts = (li as HTMLElement).innerText.split('\\n').map(t => t.trim()).filter(Boolean);
+              const textParts = li.innerText.split('\\n').map(t => t.trim()).filter(Boolean);
               
               // We also want to find the apply link. Usually it's in a button or anchor.
               // Google Jobs obscures this, but sometimes we can find an href
-              const hrefs = Array.from(li.querySelectorAll('a')).map(a => (a as HTMLAnchorElement).href).filter(h => h && h.startsWith('http'));
+              const hrefs = Array.from(li.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
               
               return {
                 textParts,
