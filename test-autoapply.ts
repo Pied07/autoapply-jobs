@@ -3,7 +3,7 @@ config({ path: ".env.local" });
 
 import { getAdminDb } from "./lib/firebase/admin";
 import { fetchJobsFromJSearch } from "./lib/jobs/fetchers";
-import { attemptAutomatedApplication } from "./lib/jobs/auto-apply";
+import { attemptAutomatedApplication } from "./test-autoapply-engine";
 import { isRelevantJob } from "./lib/jobs/matcher";
 import type { CandidateProfile } from "./types/profile";
 
@@ -20,31 +20,43 @@ async function run() {
   const profile = users.docs[0].data() as CandidateProfile;
   console.log(`Found user profile: ${profile.name} (${profile.email})`);
   
-  console.log("Fetching jobs...");
+  console.log("Fetching jobs from JSearch...");
   const rawJobs = await fetchJobsFromJSearch(profile);
-  const relevantJobs = rawJobs.filter((job) => isRelevantJob(job, profile));
+  const jobsWithUrls = rawJobs.filter(job => {
+    if (!job.applyUrl) return false;
+    const url = job.applyUrl.toLowerCase();
+    const isNativeBoard = ["linkedin.com", "indeed.com", "naukri.com", "foundit", "timesjobs.com", "internshala.com"].some(domain => url.includes(domain));
+    return !isNativeBoard;
+  });
+  const jobsToTest = jobsWithUrls.slice(0, 10);
   
-  console.log(`Found ${relevantJobs.length} relevant jobs.`);
-  
-  // Find a job with a valid applyUrl
-  const jobToTest = relevantJobs.find(job => job.applyUrl && job.applyUrl.startsWith("http"));
-  
-  if (!jobToTest) {
-    console.log("No jobs found with a valid applyUrl to test automated application.");
+  if (jobsToTest.length === 0) {
+    console.log("No relevant jobs with apply links found.");
     return;
   }
   
-  console.log(`Testing automated application for:`);
-  console.log(`Title: ${jobToTest.title}`);
-  console.log(`Company: ${jobToTest.company}`);
-  console.log(`URL: ${jobToTest.applyUrl}`);
+  console.log(`Found ${jobsToTest.length} jobs to test. Starting bulk apply...`);
   
-  console.log("\nAttempting auto-apply via Puppeteer... (this might take up to 30 seconds)");
-  const result = await attemptAutomatedApplication(jobToTest.applyUrl as string, profile);
+  const { getBrowser } = await import("./test-autoapply-engine");
+  const browser = await getBrowser();
   
-  console.log("\n=== Result ===");
-  console.log(`Status: ${result.status}`);
-  console.log(`Message: ${result.message}`);
+  try {
+    for (let i = 0; i < jobsToTest.length; i++) {
+      const job = jobsToTest[i];
+      console.log(`\n[${i+1}/${jobsToTest.length}] Testing automated application for:`);
+      console.log(`Title: ${job.title}`);
+      console.log(`Company: ${job.company}`);
+      console.log(`URL: ${job.applyUrl}`);
+      
+      const result = await attemptAutomatedApplication(job.applyUrl, profile, browser);
+      
+      console.log(`\n=== Result for ${job.company} ===`);
+      console.log(`Status: ${result.status}`);
+      console.log(`Message: ${result.message}`);
+    }
+  } finally {
+    await browser.close().catch(() => {});
+  }
   
   process.exit(0);
 }

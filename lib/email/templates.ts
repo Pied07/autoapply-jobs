@@ -50,3 +50,19 @@ Indeed: ${report.bySource.indeed || 0}
 Naukri: ${report.bySource.naukri || 0}`,
   };
 }
+
+export function buildJobAlertEmail(jobs: any[]) {
+  if (jobs.length === 0) {
+    return {
+      subject: `No new jobs today`,
+      text: `We checked the job boards, but there were no new matches for your profile today. We'll check again tomorrow!`,
+    };
+  }
+
+  const jobList = jobs.map(j => `- ${j.title} at ${j.company} [Location: ${j.location}]\n  Apply here: ${j.applyUrl}`).join('\n\n');
+
+  return {
+    subject: `Your Daily Job Alerts (${jobs.length} new jobs)`,
+    text: `Here are the latest jobs matching your profile:\n\n${jobList}\n\nGood luck with your applications!\n\n- AutoApply AI`,
+  };
+}

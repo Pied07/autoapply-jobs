@@ -41,7 +41,16 @@ export type CandidateProfile = {
   expectedSalary?: string;
   noticePeriod?: string;
   yearsOfExperience?: string;
-  dailyApplyTime: string;
+  gender?: "Male" | "Female" | "Other" | "Prefer not to say";
+  githubUrl?: string;
+  ethnicity?: string;
+  veteranStatus?: string;
+  disabilityStatus?: string;
+  willingToRelocate?: boolean;
+  coverLetter?: string;
+  birthDate?: string;
+  jobAlertTime?: string;
+  timezone?: string;
   profileCompleted: boolean;
   autoApplyEnabled?: boolean;
   createdAt: string;

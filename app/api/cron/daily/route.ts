@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { runDailyApplications } from "@/lib/applications/engine";
-import { buildReportEmail } from "@/lib/email/templates";
+import { sendDailyJobAlerts } from "@/lib/applications/engine";
+import { buildJobAlertEmail } from "@/lib/email/templates";
 import { sendMail } from "@/lib/email/sender";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { createReportPdf } from "@/lib/reports/pdf";
 import { writeUserCronLog } from "@/lib/cron/logs";
 import type { CandidateProfile } from "@/types/profile";
 
-export const maxDuration = 300; // Allow 5 minutes on Vercel Pro
+export const maxDuration = 300;
 
 function authorize(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -26,23 +25,63 @@ export async function GET(request: Request) {
       .where("profileCompleted", "==", true)
       .where("autoApplyEnabled", "==", true)
       .get();
+    
     const reports = [];
+    const currentUtcHour = new Date().getUTCHours();
 
     for (const doc of users.docs) {
       const startedAt = new Date().toISOString();
       const profile = doc.data() as CandidateProfile;
+      
+      // Calculate user's current local hour
+      // Example: jobAlertTime is "09:00"
+      const targetTime = profile.jobAlertTime || "09:00";
+      const targetHour = parseInt(targetTime.split(":")[0] || "9", 10);
+      
+      // If no timezone is provided, default to UTC
+      const userDate = new Date().toLocaleString("en-US", { timeZone: profile.timezone || "UTC" });
+      const userCurrentHour = new Date(userDate).getHours();
+      const userCurrentDate = new Date(userDate).getDate();
+
+      if (userCurrentHour !== targetHour) {
+        continue;
+      }
+
+      // If it's the first day of the month, wipe all job hashes so the user gets all scraped jobs again
+      if (userCurrentDate === 1) {
+        const hashes = await db.collection("users").doc(profile.uid).collection("jobHashes").get();
+        
+        let batch = db.batch();
+        let count = 0;
+        
+        for (const doc of hashes.docs) {
+          batch.delete(doc.ref);
+          count++;
+          if (count === 400) {
+            await batch.commit();
+            batch = db.batch();
+            count = 0;
+          }
+        }
+        if (count > 0) {
+          await batch.commit();
+        }
+      }
 
       try {
-        const report = await runDailyApplications(db, profile);
+        const jobs = await sendDailyJobAlerts(db, profile);
         
-        const { aggregateDailyReport } = await import("@/lib/applications/engine");
-        const finalReport = await aggregateDailyReport(db, profile.uid, report.newRelevantJobs);
+        // Count how many total applications they have clicked historically
+        const appsRef = await db.collection("users").doc(profile.uid).collection("applications").get();
+        const appliedCount = appsRef.docs.length;
         
-        const email = buildReportEmail(finalReport);
-        const pdf = await createReportPdf(finalReport);
+        const { createReportPdf } = await import("@/lib/reports/pdf");
+        const pdf = await createReportPdf(jobs, appliedCount, null);
+
+        const email = buildJobAlertEmail(jobs);
 
         await sendMail(profile.email, email.subject, email.text, [
-          { filename: "daily-job-report.pdf", content: pdf, contentType: "application/pdf" },
+          { filename: "daily-nexus-intel.pdf", content: pdf, contentType: "application/pdf" },
         ]);
 
         await writeUserCronLog(db, {
@@ -52,13 +91,21 @@ export async function GET(request: Request) {
           startedAt,
           finishedAt: new Date().toISOString(),
           usersProcessed: 1,
-          applied: report.applied,
-          failed: report.failed,
-          skipped: report.skipped,
-          message: `Daily cron completed. ${report.newRelevantJobs} relevant jobs found, ${report.applied} applied, ${report.failed} failed.`,
+          applied: 0,
+          failed: 0,
+          skipped: 0,
+          message: `Daily alert cron completed. Found ${jobs.length} new jobs.`,
         });
 
-        reports.push({ uid: profile.uid, applied: report.applied, failed: report.failed, hasMore: report.hasMore, newRelevantJobs: report.newRelevantJobs });
+        // Clear previous cron logs to keep the cache clear
+        const oldLogs = await db.collection("users").doc(profile.uid).collection("cronLogs").get();
+        const batch = db.batch();
+        oldLogs.docs.forEach((d) => {
+          if (d.data().startedAt !== startedAt) batch.delete(d.ref);
+        });
+        await batch.commit();
+
+        reports.push({ uid: profile.uid, foundJobs: jobs.length });
       } catch (error) {
         await writeUserCronLog(db, {
           uid: profile.uid,
@@ -67,22 +114,20 @@ export async function GET(request: Request) {
           startedAt,
           finishedAt: new Date().toISOString(),
           usersProcessed: 1,
-          message: "Daily cron failed for this user.",
+          message: "Daily alert cron failed for this user.",
           error: error instanceof Error ? error.message : "Unknown daily cron error",
         });
 
-        reports.push({ uid: profile.uid, applied: 0, failed: 1, hasMore: false, newRelevantJobs: 0 });
+        reports.push({ uid: profile.uid, foundJobs: 0, failed: true });
       }
     }
 
-    const hasMore = reports.some(r => r.hasMore);
-    return NextResponse.json({ ok: true, hasMore, reports });
+    return NextResponse.json({ ok: true, reports });
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
         error: error instanceof Error ? error.message : "Unknown daily cron startup error",
-        hint: "Check FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY from the Firebase service account JSON.",
       },
       { status: 500 },
     );

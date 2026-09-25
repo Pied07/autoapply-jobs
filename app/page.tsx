@@ -9,7 +9,7 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { collection, doc, getDocs, getDoc, limit, orderBy, query, setDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, limit, orderBy, query, setDoc, where, updateDoc } from "firebase/firestore";
 import { buildApplicationEmail } from "@/lib/email/templates";
 import { auth, db } from "@/lib/firebase/client";
 import type { ApplicationRecord, CronLog } from "@/types/application";
@@ -59,7 +59,6 @@ const emptyProfile: CandidateProfile = {
   currentSalary: "",
   expectedSalary: "",
   noticePeriod: "",
-  dailyApplyTime: "09:00",
   profileCompleted: false,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -100,7 +99,7 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
-  const [dashboardStats, setDashboardStats] = useState({
+  const [dashboardStats, setDashboardStats] = useState({ platforms: {}, locations: {}, types: {}, modes: {}, companies: {}, daily: [], salaries: {min:0, max:0},
     newRelevant: 0,
     appliedToday: 0,
     failedToday: 0,
@@ -127,16 +126,34 @@ export default function Home() {
     const recentRows = recentSnapshot?.docs.map((applicationDoc) => applicationDoc.data() as ApplicationRecord) ?? [];
 
     setApplications(recentRows);
-    const sources = todayRows.reduce((acc, row) => {
-      acc[row.source] = (acc[row.source] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+        const sources = todayRows.reduce((acc, row) => { acc[row.source] = (acc[row.source] || 0) + 1; return acc; }, {});
+    const platforms = todayRows.reduce((acc, row) => { acc[row.platform] = (acc[row.platform] || 0) + 1; return acc; }, {});
+    const locations = todayRows.reduce((acc, row) => { const loc = row.job?.location || 'Unknown'; acc[loc] = (acc[loc] || 0) + 1; return acc; }, {});
+    const modes = todayRows.reduce((acc, row) => { const mode = row.job?.workMode || 'unknown'; acc[mode] = (acc[mode] || 0) + 1; return acc; }, {});
+    const companies = todayRows.reduce((acc, row) => { const c = row.job?.company || 'Unknown'; acc[c] = (acc[c] || 0) + 1; return acc; }, {});
+    
+    // Aggregate by day of week for the past 7 days
+    const dailyMap = {};
+    recentRows.forEach(row => {
+      const day = new Date(row.createdAt).toLocaleDateString('en-US', {weekday: 'short'});
+      dailyMap[day] = (dailyMap[day] || 0) + 1;
+    });
+    const daily = Object.entries(dailyMap).map(([day, jobs]) => ({ day, jobs }));
+
+    const minS = todayRows.reduce((min, row) => Math.min(min, row.job?.salaryMin || Infinity), Infinity);
+    const maxS = todayRows.reduce((max, row) => Math.max(max, row.job?.salaryMax || 0), 0);
 
     setDashboardStats({
       newRelevant: todayRows.length,
       appliedToday: todayRows.filter((row) => row.status === "applied").length,
       failedToday: todayRows.filter((row) => row.status === "failed").length,
       sources,
+      platforms,
+      locations,
+      modes,
+      companies,
+      daily,
+      salaries: { min: minS === Infinity ? 0 : minS, max: maxS }
     });
   }, []);
 
@@ -208,7 +225,7 @@ export default function Home() {
         setStep(savedProfile.profileCompleted ? "dashboard" : "profile");
       } else {
         setProfile(emptyProfile);
-        setDashboardStats({ newRelevant: 0, appliedToday: 0, failedToday: 0, sources: {} });
+        setDashboardStats({ newRelevant: 0, appliedToday: 0, failedToday: 0, sources: {}, platforms: {}, locations: {}, types: {}, modes: {}, companies: {}, daily: [], salaries: {min:0, max:0} });
         setCronLogs([]);
         setApplications([]);
         setStep("login");
@@ -402,7 +419,7 @@ export default function Home() {
             <h1 className="text-2xl font-semibold">Indian job application cockpit</h1>
           </div>
           <div className="rounded-md border border-[#cfd8e5] px-3 py-2 text-sm text-[#4b5b6c]">
-            {user ? `Logged in: ${user.email}` : `Daily run: ${profile.dailyApplyTime} IST`}
+            {user ? `Logged in: ${user.email}` : `Guest`}
           </div>
         </div>
       </section>
@@ -507,6 +524,12 @@ export default function Home() {
                   {resumeName || "Upload PDF, DOCX, TXT, PNG, JPG, or WEBP. Scanned resumes use OCR."}
                 </span>
               </div>
+              {profile.resumeUrl && (
+                <div className="mt-4 border border-[#e1e7ef] rounded-md overflow-hidden bg-gray-50 p-2">
+                  <p className="text-sm font-medium mb-2 text-[#4b5b6c]">Current Resume Preview:</p>
+                  <iframe src={profile.resumeUrl} className="w-full h-96 border-0" title="Resume Preview" />
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 border border-[#d9e1ec] bg-white p-5 lg:grid-cols-2">
@@ -514,16 +537,48 @@ export default function Home() {
               <input value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} placeholder="Email" className="h-11 border border-[#cfd8e5] px-3" />
               <input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="Phone" className="h-11 border border-[#cfd8e5] px-3" />
               <input value={profile.address} onChange={(e) => setProfile({ ...profile, address: e.target.value })} placeholder="Address" className="h-11 border border-[#cfd8e5] px-3" />
+              
+              <div className="flex gap-4">
+                <select value={profile.gender || ""} onChange={(e) => setProfile({ ...profile, gender: e.target.value as any })} className="h-11 flex-1 border border-[#cfd8e5] px-3 text-[#607083]">
+                  <option value="" disabled>Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+                <div className="flex h-11 flex-1 items-center border border-[#cfd8e5] px-3 text-[#607083] bg-white">
+                  <input type="date" value={profile.birthDate || ""} onChange={(e) => setProfile({ ...profile, birthDate: e.target.value })} className="flex-1 outline-none bg-transparent" />
+                  {profile.birthDate && <span className="ml-2 text-xs font-semibold whitespace-nowrap text-[#245b59]">{Math.floor((new Date().getTime() - new Date(profile.birthDate).getTime()) / 31557600000)} yrs</span>}
+                </div>
+              </div>
+              
+              <div className="flex gap-4">
+                <div className="flex flex-col flex-1">
+                  <label className="text-xs text-[#607083] mb-1">Daily Alert Time</label>
+                  <input type="time" value={profile.jobAlertTime || "09:00"} onChange={(e) => setProfile({ ...profile, jobAlertTime: e.target.value })} className="h-11 border border-[#cfd8e5] px-3 text-[#607083]" />
+                </div>
+                <div className="flex flex-col flex-1">
+                  <label className="text-xs text-[#607083] mb-1">Timezone</label>
+                  <select value={profile.timezone || "Asia/Kolkata"} onChange={(e) => setProfile({ ...profile, timezone: e.target.value })} className="h-11 border border-[#cfd8e5] px-3 text-[#607083]">
+                    <option value="Asia/Kolkata">IST (Asia/Kolkata)</option>
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">EST (America/New_York)</option>
+                    <option value="America/Los_Angeles">PST (America/Los_Angeles)</option>
+                    <option value="Europe/London">GMT (Europe/London)</option>
+                  </select>
+                </div>
+              </div>
+              
               <input value={profile.school} onChange={(e) => setProfile({ ...profile, school: e.target.value })} placeholder="School" className="h-11 border border-[#cfd8e5] px-3" />
               <input value={profile.college} onChange={(e) => setProfile({ ...profile, college: e.target.value })} placeholder="College" className="h-11 border border-[#cfd8e5] px-3" />
               <textarea value={profile.experience} onChange={(e) => setProfile({ ...profile, experience: e.target.value })} placeholder="Experience" className="min-h-28 border border-[#cfd8e5] p-3 lg:col-span-2" />
-              <input value={profile.skills.join(", ")} onChange={(e) => setProfile({ ...profile, skills: textToList(e.target.value) })} placeholder="Skills, comma separated" className="h-11 border border-[#cfd8e5] px-3" />
+              <input value={profile.skills.join(", ")} onChange={(e) => setProfile({ ...profile, skills: textToList(e.target.value) })} placeholder="Skills, comma separated" className="h-11 border border-[#cfd8e5] px-3 lg:col-span-2" />
               <textarea value={profile.projects.join(", ")} onChange={(e) => setProfile({ ...profile, projects: textToList(e.target.value) })} placeholder="Projects, comma separated" className="min-h-24 border border-[#cfd8e5] p-3" />
             </div>
 
             <div className="grid gap-5 border border-[#d9e1ec] bg-white p-5">
               <h2 className="text-xl font-semibold">Job preferences</h2>
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <label className="grid gap-2 text-sm font-medium">
                   Location
                   <select
@@ -547,10 +602,6 @@ export default function Home() {
                     onChange={(e) => setProfile({ ...profile, salaryRange: { ...profile.salaryRange, max: Number(e.target.value) } })}
                   />
                   <span>Rs. {profile.salaryRange.min.toLocaleString()} - Rs. {profile.salaryRange.max.toLocaleString()}</span>
-                </label>
-                <label className="grid gap-2 text-sm font-medium">
-                  Apply time
-                  <input type="time" value={profile.dailyApplyTime} onChange={(e) => setProfile({ ...profile, dailyApplyTime: e.target.value })} className="h-11 border border-[#cfd8e5] px-3" />
                 </label>
               </div>
 
@@ -625,22 +676,6 @@ export default function Home() {
                     View logs
                   </button>
                   <button
-                    onClick={async () => {
-                      setStatus("Processing 1 chunk (10 jobs)...");
-                      try {
-                        const res = await fetch("/api/cron/daily");
-                        const data = await res.json();
-                        setStatus(data.ok ? "Chunk processed successfully." : `Cron error: ${data.error}`);
-                        refreshDashboard(user!.uid);
-                      } catch (e) {
-                        setStatus("Failed to execute cron manually.");
-                      }
-                    }}
-                    className="rounded-md border border-[#b9c7d8] px-3 py-2 text-sm font-medium bg-[#245b59] text-white"
-                  >
-                    Process 1 Chunk (10 jobs)
-                  </button>
-                  <button
                     onClick={() => user && refreshDashboard(user.uid)}
                     className="rounded-md border border-[#b9c7d8] px-3 py-2 text-sm font-medium"
                   >
@@ -658,8 +693,8 @@ export default function Home() {
             </div>
             <div className="border border-[#d9e1ec] bg-white p-5 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold">Automatic Background Apply</h3>
-                <p className="text-sm text-[#4b5b6c]">When enabled, the system will apply to new jobs daily at {profile.dailyApplyTime} IST.</p>
+                <h3 className="text-lg font-semibold">Daily Job Alerts</h3>
+                <p className="text-sm text-[#4b5b6c]">When enabled, the system will email you new matching jobs everyday at your configured time.</p>
               </div>
               <button 
                 onClick={toggleAutoApply}
@@ -681,56 +716,128 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="border border-[#d9e1ec] bg-white p-5">
-                <h3 className="mb-4 text-lg font-semibold">Application Status (Today)</h3>
+            
+            
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Jobs By Platform</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Applied', value: dashboardStats.appliedToday, color: '#245b59' },
-                          { name: 'Failed', value: dashboardStats.failedToday, color: '#9b1c1c' },
-                          { name: 'Pending', value: Math.max(0, dashboardStats.newRelevant - dashboardStats.appliedToday - dashboardStats.failedToday), color: '#cfd8e5' }
-                        ]}
-                        dataKey="value"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                      >
-                        {[
-                          { name: 'Applied', value: dashboardStats.appliedToday, color: '#245b59' },
-                          { name: 'Failed', value: dashboardStats.failedToday, color: '#9b1c1c' },
-                          { name: 'Pending', value: Math.max(0, dashboardStats.newRelevant - dashboardStats.appliedToday - dashboardStats.failedToday), color: '#cfd8e5' }
-                        ].map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
+                      <Pie data={Object.entries(dashboardStats.platforms).map(([name, value]) => ({ name, value }))} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                        {Object.keys(dashboardStats.platforms).map((_, index) => <Cell key={index} fill={['#38bdf8', '#818cf8', '#c084fc', '#f472b6'][index % 4]} />)}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#d9e1ec] bg-white p-5">
-                <h3 className="mb-4 text-lg font-semibold">Jobs by Source (Today)</h3>
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Daily Found Trend</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={Object.entries(dashboardStats.sources).map(([name, value]) => ({ name, value }))}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} allowDecimals={false} />
-                      <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                      <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40} />
+                    <BarChart data={dashboardStats.daily}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                      <XAxis dataKey="day" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Bar dataKey="jobs" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={30} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-            </div>
 
-            <div className="border border-[#d9e1ec] bg-white p-4 md:p-5">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Top Sources</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart layout="vertical" data={Object.entries(dashboardStats.sources).map(([name, value]) => ({ name, value }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                      <XAxis type="number" stroke="#94a3b8" />
+                      <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Bar dataKey="value" fill="#c084fc" radius={[0, 4, 4, 0]} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Work Modes</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={Object.entries(dashboardStats.modes).map(([name, value]) => ({ name, value }))} dataKey="value" cx="50%" cy="50%" outerRadius={80}>
+                        {Object.keys(dashboardStats.modes).map((_, index) => <Cell key={index} fill={['#f472b6', '#38bdf8', '#4ade80'][index % 3]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Location Heatmap</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={Object.entries(dashboardStats.locations).map(([loc, jobs]) => ({ loc, jobs }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                      <XAxis dataKey="loc" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Bar dataKey="jobs" fill="#4ade80" radius={[4, 4, 0, 0]} barSize={30} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Salary Expectations</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[{type:'Min', val: dashboardStats.salaries.min}, {type:'Max', val: dashboardStats.salaries.max}]}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                      <XAxis dataKey="type" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Bar dataKey="val" fill="#fb7185" radius={[4, 4, 0, 0]} barSize={30} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Top Companies</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart layout="vertical" data={Object.entries(dashboardStats.companies).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(([name, v]) => ({ name, v }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                      <XAxis type="number" stroke="#94a3b8" />
+                      <YAxis dataKey="name" type="category" stroke="#94a3b8" width={60} />
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Bar dataKey="v" fill="#e879f9" radius={[0, 4, 4, 0]} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+                <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Applied Status</h3>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={[{name: "Applied", value: dashboardStats.appliedToday}, {name: "Pending", value: dashboardStats.newRelevant - dashboardStats.appliedToday}]} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                        <Cell fill="#10b981" />
+                        <Cell fill="#ef4444" />
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+<div className="border border-[#d9e1ec] bg-white p-4 md:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h3 className="text-lg font-semibold text-[#245b59]">Successfully Applied Jobs</h3>
                 <p className="text-sm text-[#607083]">{applications.filter(a => a.status === 'applied').length} records</p>
@@ -786,12 +893,12 @@ export default function Home() {
 
             <div className="border border-[#d9e1ec] bg-white p-4 md:p-5 mt-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h3 className="text-lg font-semibold text-[#9b1c1c]">Failed Applications (Manual Apply)</h3>
+                <h3 className="text-lg font-semibold text-[#2563eb]">Pending Jobs</h3>
                 <p className="text-sm text-[#607083]">{applications.filter(a => a.status === 'failed').length} records</p>
               </div>
 
               {applications.filter(a => a.status === 'failed').length === 0 ? (
-                <p className="text-sm text-[#4b5b6c]">No failed applications.</p>
+                <p className="text-sm text-[#4b5b6c]">No pending jobs.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[600px] border-collapse text-left text-sm">
@@ -800,8 +907,7 @@ export default function Home() {
                         <th className="py-3 pr-4 font-medium">Job</th>
                         <th className="py-3 pr-4 font-medium">Company</th>
                         <th className="py-3 pr-4 font-medium">Source</th>
-                        <th className="py-3 pr-4 font-medium">Failure Reason</th>
-                        <th className="py-3 pr-4 font-medium">Failed at</th>
+                        <th className="py-3 pr-4 font-medium">Alerted at</th>
                         <th className="py-3 pr-4 font-medium">Action</th>
                       </tr>
                     </thead>
@@ -813,13 +919,20 @@ export default function Home() {
                             <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
-                            <td className="py-3 pr-4 text-[#9b1c1c] text-xs">{application.message}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{new Date(application.createdAt).toLocaleString()}</td>
                             <td className="py-3 pr-4">
                               {action.disabled ? (
                                 <button disabled className="rounded-md border border-[#d9e1ec] px-3 py-2 text-xs font-medium text-[#8a98aa]">No link</button>
                               ) : (
-                                <a href={action.href} target="_blank" rel="noreferrer" className="inline-flex rounded-md border border-[#9b1c1c] text-[#9b1c1c] px-3 py-2 text-xs font-medium">
+                                <a 
+                                  href={action.href} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  onClick={() => {
+                                    updateDoc(doc(db, "users", profile.uid, "applications", application.id), { status: "applied" })
+                                      .then(() => refreshDashboard(profile.uid));
+                                  }}
+                                  className="inline-flex rounded-md border border-[#2563eb] text-[#2563eb] px-3 py-2 text-xs font-medium hover:bg-[#2563eb] hover:text-white transition-colors">
                                   Apply Manually
                                 </a>
                               )}
@@ -841,7 +954,8 @@ export default function Home() {
                 <p><span className="font-semibold text-[#17202a]">Notice period:</span> {profile.noticePeriod || "Not set"}</p>
                 <p><span className="font-semibold text-[#17202a]">Current Salary:</span> {profile.currentSalary || "Not set"}</p>
                 <p><span className="font-semibold text-[#17202a]">Expected Salary:</span> {profile.expectedSalary || "Not set"}</p>
-                <p className="md:col-span-2"><span className="font-semibold text-[#17202a]">Apply time:</span> {profile.dailyApplyTime} IST</p>
+                <p><span className="font-semibold text-[#17202a]">Gender:</span> {profile.gender || "Not set"}</p>
+                <p><span className="font-semibold text-[#17202a]">Birth Date:</span> {profile.birthDate || "Not set"}</p>
                 <p className="md:col-span-2"><span className="font-semibold text-[#17202a]">Skills:</span> {profile.skills.join(", ") || "Not set"}</p>
               </div>
             </div>

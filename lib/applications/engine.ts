@@ -133,6 +133,40 @@ export async function runDailyApplications(db: Firestore, profile: CandidateProf
   return report;
 }
 
+export async function sendDailyJobAlerts(db: Firestore, profile: CandidateProfile) {
+  const rawJobs = await fetchJobsFromJSearch(profile);
+  
+  const allJobs = rawJobs
+    .filter((job) => isRelevantJob(job, profile) && job.applyUrl)
+    .sort((a, b) => scoreJob(b, profile) - scoreJob(a, profile));
+
+  const newJobs = await filterNewJobsForUser(db, profile.uid, allJobs);
+  
+  const jobsToAlert = newJobs;
+
+  // Save hashes so we don't alert about these jobs again tomorrow
+  const { saveJobHash } = await import("@/lib/jobs/deduplicator");
+  for (const job of jobsToAlert) {
+    await saveJobHash(db, profile.uid, job);
+    
+    // Also save them into applications list as 'failed' (which acts as pending) so they show up in UI
+    const row: ApplicationRecord = {
+      id: `${profile.uid}-${job.id}-${Date.now()}`,
+      uid: profile.uid,
+      job,
+      status: "failed", // Pending manual apply
+      channel: job.applyChannel,
+      platform: job.platform,
+      source: job.source,
+      message: "Pending manual application via alert",
+      createdAt: new Date().toISOString(),
+    };
+    await db.collection("users").doc(profile.uid).collection("applications").doc(row.id).set(row);
+  }
+
+  return jobsToAlert;
+}
+
 export async function buildWeeklyReport(db: Firestore, uid: string) {
   const since = new Date();
   since.setDate(since.getDate() - 7);
