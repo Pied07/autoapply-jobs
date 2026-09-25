@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 9, color: "#64748b" }
 });
 
-function getChartUrl(type: string, labels: string[], data: number[], bgColors: string[]) {
+function getChartUrl(type: string, labels: string[], data: number[], bgColors: string[], isHorizontal: boolean = false) {
   const chartConfig = {
     type: type,
     data: {
@@ -46,6 +46,7 @@ function getChartUrl(type: string, labels: string[], data: number[], bgColors: s
       datasets: [{ data: data, backgroundColor: bgColors, borderColor: "#0f172a", borderWidth: 1 }]
     },
     options: {
+      indexAxis: isHorizontal ? 'y' : 'x',
       plugins: {
         legend: { display: type === 'pie' || type === 'doughnut', position: 'right', labels: { color: '#e2e8f0', font: { size: 10 } } },
         datalabels: { color: '#ffffff', font: { weight: 'bold' } }
@@ -73,7 +74,7 @@ export function ReportDocument({ jobs, appliedCount, history }: { jobs: Normaliz
 
   // Graph 3: Location Matches (Bar)
   const locs = jobs.reduce((acc, j) => { acc[j.location] = (acc[j.location] || 0) + 1; return acc; }, {} as Record<string, number>);
-  const c3 = getChartUrl('horizontalBar', Object.keys(locs).slice(0, 4), Object.values(locs).slice(0, 4), ['#c084fc']);
+  const c3 = getChartUrl('bar', Object.keys(locs).slice(0, 4), Object.values(locs).slice(0, 4), ['#c084fc'], true);
 
   // Graph 4: Job Types (Doughnut)
   const types = jobs.reduce((acc, j) => { acc[j.jobType] = (acc[j.jobType] || 0) + 1; return acc; }, {} as Record<string, number>);
@@ -89,7 +90,7 @@ export function ReportDocument({ jobs, appliedCount, history }: { jobs: Normaliz
   const c6 = getChartUrl('bar', sortedComps.map(c=>c[0]), sortedComps.map(c=>c[1]), ['#f472b6']);
 
   // Graph 7: Application Trend (Line - Mocked/Historical)
-  const c7 = getChartUrl('line', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [2, 5, 3, 6, 4, 8, appliedCount || 2], ['transparent']);
+  const c7 = getChartUrl('line', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [2, 5, 3, 6, 4, 8, appliedCount || 2], ['#06b6d4']);
   
   // Graph 8: Salary vs Expectation (Bar)
   const c8 = getChartUrl('bar', ['Min Salary', 'Max Salary'], [jobs[0]?.salaryMin || 0, jobs[0]?.salaryMax || 0], ['#4ade80', '#fb7185']);
@@ -112,12 +113,12 @@ export function ReportDocument({ jobs, appliedCount, history }: { jobs: Normaliz
             <Text style={styles.statValue}>{jobs.length}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Total Jobs Applied</Text>
-            <Text style={styles.statValue}>{appliedCount}</Text>
+            <Text style={styles.statLabel}>Pending Applications</Text>
+            <Text style={styles.statValue}>{jobs.length}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>System Status</Text>
-            <Text style={styles.statValue}>OPTIMAL</Text>
+            <Text style={styles.statLabel}>Total Jobs Applied</Text>
+            <Text style={styles.statValue}>{appliedCount}</Text>
           </View>
         </View>
 

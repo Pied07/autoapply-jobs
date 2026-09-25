@@ -67,7 +67,7 @@ export async function fetchJobs(params: JobSearchParams): Promise<NormalizedJob[
 
   const tasks = sources
     .filter((s) => s in scraperMap)
-    .map((s) => timeoutPromise(scraperMap[s](), 30000, [] as NormalizedJob[]));
+    .map((s) => timeoutPromise(scraperMap[s](), 50000, [] as NormalizedJob[]));
 
   const results = await Promise.allSettled(tasks);
   const all = results
