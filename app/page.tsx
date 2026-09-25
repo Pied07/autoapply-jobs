@@ -138,15 +138,20 @@ export default function Home() {
       getDocs(query(collection(db, "users", uid, "applications"), where("createdAt", ">=", today.toISOString()))).catch(
         () => undefined,
       ),
-      getDocs(query(collection(db, "users", uid, "applications"), orderBy("createdAt", "desc"), limit(50))).catch(
+      getDocs(query(collection(db, "users", uid, "applications"), orderBy("createdAt", "desc"), limit(500))).catch(
         () => undefined,
       ),
     ]);
 
-    const todayRows = todaySnapshot?.docs.map((applicationDoc) => applicationDoc.data() as ApplicationRecord) ?? [];
-    const recentRows = recentSnapshot?.docs.map((applicationDoc) => applicationDoc.data() as ApplicationRecord) ?? [];
+    const todayRows = todaySnapshot?.docs.map((applicationDoc) => ({ id: applicationDoc.id, ...applicationDoc.data() } as ApplicationRecord)) ?? [];
+    const recentRows = recentSnapshot?.docs.map((applicationDoc) => ({ id: applicationDoc.id, ...applicationDoc.data() } as ApplicationRecord)) ?? [];
 
-    setApplications(recentRows);
+    const merged = [...todayRows, ...recentRows];
+    // Deduplicate by ID
+    const uniqueApplications = Array.from(new Map(merged.map(item => [item.id, item])).values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    setApplications(uniqueApplications);
     const sources = todayRows.reduce((acc, row) => { acc[row.source] = (acc[row.source] || 0) + 1; return acc; }, {} as Record<string, number>);
     const platforms = todayRows.reduce((acc, row) => { acc[row.platform] = (acc[row.platform] || 0) + 1; return acc; }, {} as Record<string, number>);
     const locations = todayRows.reduce((acc, row) => { const loc = row.job?.location || 'Unknown'; acc[loc] = (acc[loc] || 0) + 1; return acc; }, {} as Record<string, number>);
@@ -448,22 +453,29 @@ export default function Home() {
 
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[280px_1fr]">
         <aside className="h-fit border border-[#d9e1ec] bg-white p-4">
-          {["login", "profile", "dashboard"].map((item, index) => (
-            <div key={item} className="flex items-center gap-3 py-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#e7f1ef] text-sm font-semibold text-[#245b59]">
+          {(user ? ["logout", "profile", "dashboard"] : ["login", "profile", "dashboard"]).map((item, index) => (
+            <button 
+              key={item} 
+              onClick={() => item === "logout" ? handleLogout() : setStep(item as "login" | "profile" | "dashboard" | "logs")}
+              className="flex w-full items-center gap-3 py-3 px-2 rounded-md text-left transition-colors hover:bg-[#f7f8fb]"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e7f1ef] text-sm font-semibold text-[#245b59]">
                 {index + 1}
               </span>
-              <span className={step === item ? "font-semibold" : "text-[#607083]"}>
-                {item === "login" ? "Login" : item === "profile" ? "Profile completion" : "Reports"}
+              <span className={step === item ? "font-semibold text-[#17202a]" : "text-[#607083]"}>
+                {item === "login" ? "Login" : item === "logout" ? "Logout" : item === "profile" ? "Profile completion" : "Reports"}
               </span>
-            </div>
+            </button>
           ))}
           {user && (
-            <button onClick={() => setStep("logs")} className="flex w-full items-center gap-3 py-3 text-left">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#e7f1ef] text-sm font-semibold text-[#245b59]">
+            <button 
+              onClick={() => setStep("logs")} 
+              className="flex w-full items-center gap-3 py-3 px-2 rounded-md text-left transition-colors hover:bg-[#f7f8fb]"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e7f1ef] text-sm font-semibold text-[#245b59]">
                 4
               </span>
-              <span className={step === "logs" ? "font-semibold" : "text-[#607083]"}>Cron logs</span>
+              <span className={step === "logs" ? "font-semibold text-[#17202a]" : "text-[#607083]"}>Cron logs</span>
             </button>
           )}
 
@@ -729,7 +741,7 @@ export default function Home() {
               {[
                 ["New relevant", dashboardStats.newRelevant.toString()],
                 ["Applied today", dashboardStats.appliedToday.toString()],
-                ["Failed today", dashboardStats.failedToday.toString()],
+                ["Pending applications", dashboardStats.failedToday.toString()],
                 ["Cooldown", "30 days"],
               ].map(([label, value]) => (
                 <div key={label} className="border border-[#d9e1ec] bg-white p-4 md:p-5">
@@ -741,7 +753,7 @@ export default function Home() {
             
             
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Jobs By Platform</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -749,13 +761,13 @@ export default function Home() {
                       <Pie data={Object.entries(dashboardStats.platforms).map(([name, value]) => ({ name, value }))} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
                         {Object.keys(dashboardStats.platforms).map((_, index) => <Cell key={index} fill={['#38bdf8', '#818cf8', '#c084fc', '#f472b6'][index % 4]} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Daily Found Trend</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -763,14 +775,14 @@ export default function Home() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                       <XAxis dataKey="day" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                       <Bar dataKey="jobs" fill="#818cf8" radius={[4, 4, 0, 0]} barSize={30} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Top Sources</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -778,14 +790,14 @@ export default function Home() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                       <XAxis type="number" stroke="#94a3b8" />
                       <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} />
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                       <Bar dataKey="value" fill="#c084fc" radius={[0, 4, 4, 0]} barSize={20} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Work Modes</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -793,13 +805,13 @@ export default function Home() {
                       <Pie data={Object.entries(dashboardStats.modes).map(([name, value]) => ({ name, value }))} dataKey="value" cx="50%" cy="50%" outerRadius={80}>
                         {Object.keys(dashboardStats.modes).map((_, index) => <Cell key={index} fill={['#f472b6', '#38bdf8', '#4ade80'][index % 3]} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
               
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Location Heatmap</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -807,14 +819,14 @@ export default function Home() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                       <XAxis dataKey="loc" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                       <Bar dataKey="jobs" fill="#4ade80" radius={[4, 4, 0, 0]} barSize={30} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Salary Expectations</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -822,14 +834,14 @@ export default function Home() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                       <XAxis dataKey="type" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                       <Bar dataKey="val" fill="#fb7185" radius={[4, 4, 0, 0]} barSize={30} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Top Companies</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -837,14 +849,14 @@ export default function Home() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
                       <XAxis type="number" stroke="#94a3b8" />
                       <YAxis dataKey="name" type="category" stroke="#94a3b8" width={60} />
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                       <Bar dataKey="v" fill="#e879f9" radius={[0, 4, 4, 0]} barSize={20} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg col-span-2">
+              <div className="border border-[#1e293b] bg-[#0f172a] p-5 rounded-lg md:col-span-2">
                 <h3 className="mb-4 text-lg font-semibold text-[#38bdf8]">Applied Status</h3>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -853,7 +865,7 @@ export default function Home() {
                         <Cell fill="#10b981" />
                         <Cell fill="#ef4444" />
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
+                      <Tooltip cursor={false} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#f8fafc' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -872,6 +884,7 @@ export default function Home() {
                   <table className="w-full min-w-[600px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-[#d9e1ec] text-[#607083]">
+                        <th className="py-3 pr-4 font-medium">#</th>
                         <th className="py-3 pr-4 font-medium">Job</th>
                         <th className="py-3 pr-4 font-medium">Company</th>
                         <th className="py-3 pr-4 font-medium">Source</th>
@@ -880,10 +893,11 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {applications.filter(a => a.status === 'applied').map((application) => {
+                      {applications.filter(a => a.status === 'applied').map((application, idx) => {
                         const action = applicationAction(application);
                         return (
                           <tr key={application.id} className="border-b border-[#edf1f6]">
+                            <td className="py-3 pr-4 font-medium text-[#17202a]">{idx + 1}</td>
                             <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>
@@ -926,6 +940,7 @@ export default function Home() {
                   <table className="w-full min-w-[600px] border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-[#d9e1ec] text-[#607083]">
+                        <th className="py-3 pr-4 font-medium">#</th>
                         <th className="py-3 pr-4 font-medium">Job</th>
                         <th className="py-3 pr-4 font-medium">Company</th>
                         <th className="py-3 pr-4 font-medium">Source</th>
@@ -934,10 +949,11 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {applications.filter(a => a.status === 'failed').map((application) => {
+                      {applications.filter(a => a.status === 'failed').map((application, idx) => {
                         const action = applicationAction(application);
                         return (
                           <tr key={application.id} className="border-b border-[#edf1f6]">
+                            <td className="py-3 pr-4 font-medium text-[#17202a]">{idx + 1}</td>
                             <td className="py-3 pr-4 font-medium text-[#17202a]">{application.job.title}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.job.company}</td>
                             <td className="py-3 pr-4 text-[#4b5b6c]">{application.source}</td>

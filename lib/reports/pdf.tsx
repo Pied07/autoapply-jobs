@@ -24,7 +24,8 @@ const styles = StyleSheet.create({
   table: { width: "100%", backgroundColor: "#1e293b", borderRadius: 8, border: "1px solid #334155" },
   tableHeader: { flexDirection: "row", backgroundColor: "#0f172a", padding: 10, borderBottom: "1px solid #334155" },
   tableRow: { flexDirection: "row", padding: 10, borderBottom: "1px solid #334155" },
-  col1: { width: "40%" },
+  colIdx: { width: "5%" },
+  col1: { width: "35%" },
   col2: { width: "25%" },
   col3: { width: "20%" },
   col4: { width: "15%" },
@@ -135,6 +136,7 @@ export function ReportDocument({ jobs, appliedCount, history }: { jobs: Normaliz
         
         <View style={styles.table}>
           <View style={styles.tableHeader}>
+            <View style={styles.colIdx}><Text style={styles.thText}>#</Text></View>
             <View style={styles.col1}><Text style={styles.thText}>Job Title</Text></View>
             <View style={styles.col2}><Text style={styles.thText}>Company</Text></View>
             <View style={styles.col3}><Text style={styles.thText}>Location</Text></View>
@@ -146,8 +148,9 @@ export function ReportDocument({ jobs, appliedCount, history }: { jobs: Normaliz
                 <Text style={styles.tdText}>No new jobs processed today.</Text>
              </View>
           ) : (
-            jobs.slice(0, 8).map((job, idx) => (
+            jobs.map((job, idx) => (
               <View key={idx} style={styles.tableRow}>
+                <View style={styles.colIdx}><Text style={styles.tdText}>{idx + 1}</Text></View>
                 <View style={styles.col1}><Text style={styles.tdText}>{job.title}</Text></View>
                 <View style={styles.col2}><Text style={styles.tdText}>{job.company}</Text></View>
                 <View style={styles.col3}><Text style={styles.tdText}>{job.location}</Text></View>
