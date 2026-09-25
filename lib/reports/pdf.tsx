@@ -42,7 +42,7 @@ function getChartUrl(type: string, labels: string[], data: number[], bgColors: s
     type: type,
     data: {
       labels: labels,
-      datasets: [{ data: data, backgroundColor: bgColors, borderColor: "#0f172a", borderWidth: 2 }]
+      datasets: [{ data: data, backgroundColor: bgColors, borderColor: "#0f172a", borderWidth: 1 }]
     },
     options: {
       plugins: {
@@ -50,12 +50,12 @@ function getChartUrl(type: string, labels: string[], data: number[], bgColors: s
         datalabels: { color: '#ffffff', font: { weight: 'bold' } }
       },
       scales: type !== 'pie' && type !== 'doughnut' ? {
-        x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: '#334155' } },
-        y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: '#334155' } }
+        x: { ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: '#334155', tickColor: '#334155' } },
+        y: { ticks: { color: '#cbd5e1', font: { size: 10 } }, grid: { color: '#334155', tickColor: '#334155' } }
       } : undefined
     }
   };
-  return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=400&h=220&bkg=1e293b`;
+  return `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=400&h=220&bkg=transparent`;
 }
 
 // Generate color palette
