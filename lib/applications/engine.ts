@@ -144,24 +144,46 @@ export async function sendDailyJobAlerts(db: Firestore, profile: CandidateProfil
   
   const jobsToAlert = newJobs;
 
-  // Save hashes so we don't alert about these jobs again tomorrow
-  const { saveJobHash } = await import("@/lib/jobs/deduplicator");
-  for (const job of jobsToAlert) {
-    await saveJobHash(db, profile.uid, job);
+  // We will run the DB writes using a batch to avoid sequential write timeouts
+  const { createJobHash } = await import("@/lib/jobs/hash");
+  const { addDays, APPLICATION_COOLDOWN_DAYS } = await import("@/lib/applications/rules");
+  const now = new Date();
+
+  const BATCH_SIZE = 250; // Firestore limit is 500 ops per batch, we do 2 ops per job so 250 jobs max per batch
+  for (let i = 0; i < jobsToAlert.length; i += BATCH_SIZE) {
+    const chunk = jobsToAlert.slice(i, i + BATCH_SIZE);
+    const batch = db.batch();
     
-    // Also save them into applications list as 'failed' (which acts as pending) so they show up in UI
-    const row: ApplicationRecord = {
-      id: `${profile.uid}-${job.id}-${Date.now()}`,
-      uid: profile.uid,
-      job,
-      status: "failed", // Pending manual apply
-      channel: job.applyChannel,
-      platform: job.platform,
-      source: job.source,
-      message: "Pending manual application via alert",
-      createdAt: new Date().toISOString(),
-    };
-    await db.collection("users").doc(profile.uid).collection("applications").doc(row.id).set(row);
+    // To do this properly without `get()` sequential calls, we'll just overwrite the jobHash.
+    // Overwriting the jobHash with a new firstSeenAt/lastAppliedAt is perfectly fine since the cooldown is purely based on expiresAt.
+    for (const job of chunk) {
+      const hash = createJobHash(job);
+      const hashRef = db.collection("users").doc(profile.uid).collection("jobHashes").doc(hash);
+      
+      batch.set(hashRef, {
+        uid: profile.uid,
+        hash,
+        company: job.company,
+        jobTitle: job.title,
+        lastAppliedAt: now,
+        expiresAt: addDays(now, APPLICATION_COOLDOWN_DAYS),
+      }, { merge: true }); // Merge ensures we don't wipe firstSeenAt if it already exists (even though we only alert on fresh jobs)
+
+      const row: ApplicationRecord = {
+        id: `${profile.uid}-${job.id}-${Date.now()}`,
+        uid: profile.uid,
+        job,
+        status: "failed", // Pending manual apply
+        channel: job.applyChannel,
+        platform: job.platform,
+        source: job.source,
+        message: "Pending manual application via alert",
+        createdAt: new Date().toISOString(),
+      };
+      const appRef = db.collection("users").doc(profile.uid).collection("applications").doc(row.id);
+      batch.set(appRef, row);
+    }
+    await batch.commit();
   }
 
   return jobsToAlert;
