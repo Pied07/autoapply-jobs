@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     try {
       const report = await buildWeeklyReport(db, profile.uid);
       const email = buildReportEmail(report);
-      const pdf = await createReportPdf(report);
+      const pdf = await createReportPdf(report.rows.map(r => r.job), report.applied, null);
 
       await sendMail(profile.email, email.subject, email.text, [
         { filename: "weekly-job-report.pdf", content: pdf, contentType: "application/pdf" },

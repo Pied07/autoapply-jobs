@@ -99,11 +99,30 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
-  const [dashboardStats, setDashboardStats] = useState({ platforms: {}, locations: {}, types: {}, modes: {}, companies: {}, daily: [], salaries: {min:0, max:0},
+  const [dashboardStats, setDashboardStats] = useState<{
+    newRelevant: number;
+    appliedToday: number;
+    failedToday: number;
+    sources: Record<string, number>;
+    platforms: Record<string, number>;
+    locations: Record<string, number>;
+    types: Record<string, number>;
+    modes: Record<string, number>;
+    companies: Record<string, number>;
+    daily: { day: string; jobs: number }[];
+    salaries: { min: number; max: number };
+  }>({
     newRelevant: 0,
     appliedToday: 0,
     failedToday: 0,
-    sources: {} as Record<string, number>,
+    sources: {},
+    platforms: {},
+    locations: {},
+    types: {},
+    modes: {},
+    companies: {},
+    daily: [],
+    salaries: { min: 0, max: 0 },
   });
   const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
@@ -126,14 +145,14 @@ export default function Home() {
     const recentRows = recentSnapshot?.docs.map((applicationDoc) => applicationDoc.data() as ApplicationRecord) ?? [];
 
     setApplications(recentRows);
-        const sources = todayRows.reduce((acc, row) => { acc[row.source] = (acc[row.source] || 0) + 1; return acc; }, {});
-    const platforms = todayRows.reduce((acc, row) => { acc[row.platform] = (acc[row.platform] || 0) + 1; return acc; }, {});
-    const locations = todayRows.reduce((acc, row) => { const loc = row.job?.location || 'Unknown'; acc[loc] = (acc[loc] || 0) + 1; return acc; }, {});
-    const modes = todayRows.reduce((acc, row) => { const mode = row.job?.workMode || 'unknown'; acc[mode] = (acc[mode] || 0) + 1; return acc; }, {});
-    const companies = todayRows.reduce((acc, row) => { const c = row.job?.company || 'Unknown'; acc[c] = (acc[c] || 0) + 1; return acc; }, {});
+    const sources = todayRows.reduce((acc, row) => { acc[row.source] = (acc[row.source] || 0) + 1; return acc; }, {} as Record<string, number>);
+    const platforms = todayRows.reduce((acc, row) => { acc[row.platform] = (acc[row.platform] || 0) + 1; return acc; }, {} as Record<string, number>);
+    const locations = todayRows.reduce((acc, row) => { const loc = row.job?.location || 'Unknown'; acc[loc] = (acc[loc] || 0) + 1; return acc; }, {} as Record<string, number>);
+    const modes = todayRows.reduce((acc, row) => { const mode = row.job?.workMode || 'unknown'; acc[mode] = (acc[mode] || 0) + 1; return acc; }, {} as Record<string, number>);
+    const companies = todayRows.reduce((acc, row) => { const c = row.job?.company || 'Unknown'; acc[c] = (acc[c] || 0) + 1; return acc; }, {} as Record<string, number>);
     
     // Aggregate by day of week for the past 7 days
-    const dailyMap = {};
+    const dailyMap = {} as Record<string, number>;
     recentRows.forEach(row => {
       const day = new Date(row.createdAt).toLocaleDateString('en-US', {weekday: 'short'});
       dailyMap[day] = (dailyMap[day] || 0) + 1;
@@ -150,6 +169,7 @@ export default function Home() {
       sources,
       platforms,
       locations,
+      types: {},
       modes,
       companies,
       daily,

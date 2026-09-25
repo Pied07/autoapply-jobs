@@ -48,7 +48,7 @@ async function run() {
       console.log(`Company: ${job.company}`);
       console.log(`URL: ${job.applyUrl}`);
       
-      const result = await attemptAutomatedApplication(job.applyUrl, profile, browser);
+      const result = await attemptAutomatedApplication(job.applyUrl!, profile, browser);
       
       console.log(`\n=== Result for ${job.company} ===`);
       console.log(`Status: ${result.status}`);
