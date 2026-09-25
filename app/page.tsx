@@ -59,6 +59,8 @@ const emptyProfile: CandidateProfile = {
   currentSalary: "",
   expectedSalary: "",
   noticePeriod: "",
+  jobAlertTime: "09:00",
+  timezone: "Asia/Kolkata",
   profileCompleted: false,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
