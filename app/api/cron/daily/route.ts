@@ -6,7 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { writeUserCronLog } from "@/lib/cron/logs";
 import type { CandidateProfile } from "@/types/profile";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 function authorize(request: Request) {
   const expected = process.env.CRON_SECRET;
